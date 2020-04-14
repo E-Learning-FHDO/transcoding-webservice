@@ -85,7 +85,10 @@ class ProfileController extends Controller
         $grid = new Grid(new Profile);
 
         $grid->id('ID')->sortable();
-        $grid->encoder('Encoder');
+        //$grid->encoder('Encoder')->link();
+        $grid->column('encoder')->display(function ($title) {
+            return "<a href='profiles/$this->id'>$title</a>";
+        });
         $grid->fallback_id('Fallback')->using(Profile::all()->pluck('encoder', 'id')->all());
         //$grid->created_at('Created at');
         //$grid->updated_at('Updated at');

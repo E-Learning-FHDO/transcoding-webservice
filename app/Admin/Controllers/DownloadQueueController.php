@@ -2,6 +2,7 @@
 
 namespace App\Admin\Controllers;
 
+use App\Http\Controllers\DownloadController;
 use App\Models\Download;
 use App\Models\Profile;
 use App\Http\Controllers\Controller;
@@ -87,17 +88,7 @@ class DownloadQueueController extends Controller
      */
     public function destroy($id)
     {
-        $filenames = DB::table('downloads')->select('payload')->whereIn('id', explode(',', $id))->pluck('payload')->toArray();
-
-        $files_to_delete = array();
-        foreach ($filenames as $filename)
-        {
-            $filename = json_decode($filename);
-            $files_to_delete[] = $filename->source->mediakey;
-        }
-
-        Storage::disk('uploaded')->delete($files_to_delete);
-
+        DownloadController::deleteById($id);
         return $this->form()->destroy($id);
     }
 
@@ -112,7 +103,7 @@ class DownloadQueueController extends Controller
 
         if(!Admin::user()->isAdministrator())
         {
-            $grid->model()->where('uid', '=', Admin::user()->id);
+            $grid->model()->where('user_id', '=', Admin::user()->id);
         }
 
         $grid->disableCreateButton();
@@ -123,10 +114,12 @@ class DownloadQueueController extends Controller
 
         $grid->id('ID')->sortable();
 
-        $grid->user()->name();
+        $grid->user()->name()->display(function ($name){
+            return "<a href='users/$this->id'>$name</a>";
+        });
 
         $grid->column('payload', 'URL')->display(function($payload) {
-           return $payload['source']['url'];
+            return '<a target="_blank" href="' . $payload['source']['url'] . '">'. $payload['source']['url'] .'</a>';
         });
 
         $grid->processed('Processed')->using(['0' => 'No', '1' => 'Yes']);
@@ -156,14 +149,6 @@ class DownloadQueueController extends Controller
             return print_r($payload['source']['mediakey'], true);
         });
 
-
-        /*
-        $show->processed('Processed')->using(['0' => 'No', '1' => 'Yes']);
-        $show->field('payload', 'Payload')->as(function ($payload) {
-            return print_r(($payload), true);
-        });
-*/
-
         $show->created_at('Created at');
         $show->updated_at('Updated at');
 
@@ -181,11 +166,8 @@ class DownloadQueueController extends Controller
 
         $form = new Form(new Download);
 
-        //$form->display('ID');
         $form->select('rid')->options('admin.permissions')->options($roleModel::all()->pluck('name', 'id'));
         $form->text('processed','Processed');
-        //$form->display('Created at');
-        //$form->display('Updated at');
 
         return $form;
     }

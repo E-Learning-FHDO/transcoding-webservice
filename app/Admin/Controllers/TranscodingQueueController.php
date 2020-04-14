@@ -2,6 +2,7 @@
 
 namespace App\Admin\Controllers;
 
+use App\Http\Controllers\VideoController;
 use App\Models\Profile;
 use App\Http\Controllers\Controller;
 use App\Models\Video;
@@ -88,10 +89,7 @@ class TranscodingQueueController extends Controller
      */
     public function destroy($id)
     {
-        $filenames = DB::table('videos')->select('file')->whereIn('id', explode(',', $id))->pluck('file')->toArray();
-
-        Storage::disk('converted')->delete($filenames);
-
+        VideoController::deleteById($id);
         return $this->form()->destroy($id);
     }
         /**
@@ -105,7 +103,7 @@ class TranscodingQueueController extends Controller
 
         if(!Admin::user()->isAdministrator())
         {
-            $grid->model()->where('uid', '=', Admin::user()->id);
+            $grid->model()->where('user_id', '=', Admin::user()->id);
         }
 
         $grid->disableCreateButton();
@@ -115,13 +113,18 @@ class TranscodingQueueController extends Controller
         });
 
         $grid->id('ID')->sortable();
-        $grid->user()->name();
-        $grid->file('File');
+        $grid->user()->name()->display(function ($name){
+            return "<a href='users/$this->id'>$name</a>";
+        });
+
+        $grid->file('File')->display(function ($file){
+            return "<a href='transcodingqueue/$this->id'>$file</a>";
+        });
+
         $grid->processed('Processed')->using(['0' => 'No', '1' => 'Yes']);
         $grid->created_at('Created at');
-        //$grid->updated_at('Updated at');
         $grid->converted_at('Converted at');
-
+        $grid->downloaded_at('Downloaded at');
         return $grid;
     }
 
@@ -145,8 +148,6 @@ class TranscodingQueueController extends Controller
         $show->target()->as(function ($payload) {
             return print_r($payload, true);
         });
-        //$show->created_at('Created at');
-        //$show->updated_at('Updated at');
 
         return $show;
     }
@@ -162,8 +163,6 @@ class TranscodingQueueController extends Controller
 
         //$form->display('ID');
         $form->text('file','File');
-        //$form->display('Created at');
-        //$form->display('Updated at');
 
         return $form;
     }

@@ -10,7 +10,7 @@ class Video extends Model
     protected $guarded = [];
 
     protected $fillable = [
-       'uid', 'title', 'mediakey', 'disk', 'path', 'file', 'processed', 'target', 'converted_at'
+       'user_id', 'download_id', 'title', 'mediakey', 'disk', 'path', 'file', 'processed', 'target', 'converted_at', 'downloaded_at'
     ];
 
     public $attributes = [];
@@ -19,6 +19,11 @@ class Video extends Model
 
     public function user()
     {
-        return $this->belongsTo(User::class, 'uid', 'id');
+        return $this->belongsTo(User::class, 'user_id', 'id');
+    }
+
+    public function download()
+    {
+        return $this->belongsTo(Download::class, 'download_id', 'id');
     }
 }

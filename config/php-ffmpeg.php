@@ -1,8 +1,6 @@
 <?php
 
 return [
-    'default_disk' => 'local',
-
     'ffmpeg' => [
         'binaries' => env('FFMPEG_BINARIES', 'ffmpeg'),
         'threads' => 12,

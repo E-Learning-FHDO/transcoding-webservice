@@ -2,7 +2,6 @@
 
 namespace App\Jobs;
 
-use App\Http\Controllers\TranscodingController;
 use App\Models\Video;
 use FFMpeg\Coordinate\Dimension;
 use Illuminate\Bus\Queueable;
@@ -10,8 +9,9 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
+use App\Http\Controllers\TranscodingController;
 
-class CreateSpritemapJob implements ShouldQueue
+class ConvertPreviewVideoJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
@@ -22,16 +22,20 @@ class CreateSpritemapJob implements ShouldQueue
     public function __construct(Video $video)
     {
         $this->video = $video;
-        $this->dimension = new Dimension(10, 10);
+        $target = $this->video->target;
+
+        $size = explode('x', $target['size']);
+        $this->dimension = new Dimension($size[0], $size[1]);
     }
 
     public function handle()
     {
         $transcoder = new TranscodingController($this->video, $this->dimension, $this->attempts());
-        $transcoder->createSpritemap();
+        $transcoder->setPreview(true);
+        $transcoder->transcode();
     }
 
-    public function failed(\Exception $exception)
+    public function failed($exception)
     {
         echo $exception->getMessage();
     }

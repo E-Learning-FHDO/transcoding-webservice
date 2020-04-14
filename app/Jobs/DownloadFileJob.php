@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Jobs;
+
 use App\Models\Download;
 use App\Models\Video;
 use App\User;
@@ -10,12 +11,8 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Auth;
-use GuzzleHttp\Exception\GuzzleException;
 use GuzzleHttp\Client;
-use Illuminate\Http\File;
 
 class DownloadFileJob implements ShouldQueue
 {
@@ -36,7 +33,7 @@ class DownloadFileJob implements ShouldQueue
 
         $guzzle = new Client();
 
-        $api_token =  User::where('id','=', $this->download->uid)->pluck('api_token')->first();
+        $api_token = User::where('id', '=', $this->download->user_id)->pluck('api_token')->first();
 
         $response = $guzzle->post($payload['source']['url'], [
             RequestOptions::JSON => [
@@ -50,15 +47,14 @@ class DownloadFileJob implements ShouldQueue
 
         $filename = basename($payload['source']['url']);
 
-        if(isset($payload['thumbnail']))
-        {
-            foreach($payload['thumbnail'] as $thumbnail_key => $thumbnail_value)
-            {
+        if (isset($payload['thumbnail'])) {
+            foreach ($payload['thumbnail'] as $thumbnail_key => $thumbnail_value) {
                 $thumbnail = array();
                 $thumbnail[$thumbnail_key] = $thumbnail_value;
                 $payload['thumbnail_item'] = $thumbnail;
                 $thumbnail_item = Video::create([
-                    'uid' => $this->download->uid,
+                    'user_id' => $this->download->user_id,
+                    'download_id' => $this->download->id,
                     'disk' => 'uploaded',
                     'mediakey' => $payload['source']['mediakey'],
                     'path' => $path,
@@ -69,37 +65,52 @@ class DownloadFileJob implements ShouldQueue
             }
         }
 
-        foreach($payload['target'] as $target)
-        {
-            $target['created_at'] = $payload['source']['created_at'];
-
-            $video = Video::create([
-                'uid'           => $this->download->uid,
-                'disk'          => 'uploaded',
-                'mediakey'      => $payload['source']['mediakey'],
-                'path'          => $path,
-                'title'         => $filename,
-                'target'        => $target
-            ]);
-
-            ConvertVideoJob::dispatch($video)->onQueue('video');
-        }
-
-        if(isset($payload['spritemap']))
-        {
+        if (isset($payload['spritemap'])) {
             $spritemap = Video::create([
-                'uid'           => $this->download->uid,
-                'disk'          => 'uploaded',
-                'mediakey'      => $payload['source']['mediakey'],
-                'path'          => $path,
-                'title'         => $filename,
-                'target'        => $payload
+                'user_id' => $this->download->user_id,
+                'download_id' => $this->download->id,
+                'disk' => 'uploaded',
+                'mediakey' => $payload['source']['mediakey'],
+                'path' => $path,
+                'title' => $filename,
+                'target' => $payload
             ]);
 
             CreateSpritemapJob::dispatch($spritemap)->onQUeue('video');
         }
+
+        foreach ($payload['target']['format'] as $target) {
+            $target['created_at'] = $payload['source']['created_at'];
+
+            if (isset($payload['target']['start']) && isset($payload['target']['duration'])) {
+                $video = Video::create([
+                    'user_id' => $this->download->user_id,
+                    'download_id' => $this->download->id,
+                    'disk' => 'uploaded',
+                    'mediakey' => $payload['source']['mediakey'],
+                    'path' => $path,
+                    'title' => $filename,
+                    'target' => $target
+                ]);
+
+                ConvertPreviewVideoJob::dispatch($video)->onQueue('video');
+            }
+
+            $video = Video::create([
+                'user_id' => $this->download->user_id,
+                'download_id' => $this->download->id,
+                'disk' => 'uploaded',
+                'mediakey' => $payload['source']['mediakey'],
+                'path' => $path,
+                'title' => $filename,
+                'target' => $target
+            ]);
+
+            ConvertVideoJob::dispatch($video)->onQueue('video');
+        }
     }
-    public function failed($exception)
+
+    public function failed(\Exception $exception)
     {
         echo $exception->getMessage();
     }

@@ -15,7 +15,8 @@ class CreateVideosTable extends Migration
     {
         Schema::create('videos', function (Blueprint $table) {
             $table->increments('id');
-            $table->integer('uid');
+            $table->integer('user_id');
+            $table->integer('download_id');
             $table->string('title');
             $table->string('mediakey');
             $table->string('disk');
@@ -24,6 +25,7 @@ class CreateVideosTable extends Migration
             $table->string('file')->nullable();
             $table->boolean('processed')->default(false);
             $table->datetime('converted_at')->nullable();
+            $table->datetime('downloaded_at')->nullable();
             $table->timestamps();
         });
     }
