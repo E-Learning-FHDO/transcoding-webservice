@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Http\Controllers\TranscodingController;
 use App\Models\Video;
 use Carbon\Carbon;
 use FFMpeg\Coordinate\Dimension;
@@ -10,11 +11,9 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
-use App\Http\Controllers\TranscodingController;
 use Illuminate\Support\Facades\Log;
-use mysql_xdevapi\Exception;
 
-class ConvertPreviewVideoJob implements ShouldQueue
+class ConvertHLSVideoJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
@@ -36,16 +35,16 @@ class ConvertPreviewVideoJob implements ShouldQueue
         $existingFailedJobs = Video::where('download_id', '=', $this->video->download_id)->whereNotNull('failed_at')->count() > 0;
 
         if (!$this->video->getAttribute('converted_at') && !$existingFailedJobs) {
-            try
-            {
+            try{
                 $transcoder = new TranscodingController($this->video, $this->dimension, $this->attempts());
-                $transcoder->setPreview(true);
+                $transcoder->setHLS(true);
                 $transcoder->transcode();
                 $transcoder->executeCallback();
             }
-            catch (\Exception $exception)
+            catch(\Exception $exception)
             {
                 echo "Message: " . $exception->getMessage() . ", Code: " . $exception->getCode();
+
                 if(!$exception->getMessage() === 'Encoding failed')
                 {
                     $this->video->update(['failed_at' => Carbon::now()]);

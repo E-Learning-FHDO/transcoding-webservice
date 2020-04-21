@@ -11,6 +11,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use GuzzleHttp\Client;
 
@@ -29,7 +30,7 @@ class DownloadFileJob implements ShouldQueue
     {
         $payload = $this->download->payload;
 
-        $path = $payload['source']['mediakey'];
+        $path = $payload['mediakey'];
 
         $guzzle = new Client();
 
@@ -56,7 +57,7 @@ class DownloadFileJob implements ShouldQueue
                     'user_id' => $this->download->user_id,
                     'download_id' => $this->download->id,
                     'disk' => 'uploaded',
-                    'mediakey' => $payload['source']['mediakey'],
+                    'mediakey' => $payload['mediakey'],
                     'path' => $path,
                     'title' => $filename,
                     'target' => $payload,
@@ -70,7 +71,7 @@ class DownloadFileJob implements ShouldQueue
                 'user_id' => $this->download->user_id,
                 'download_id' => $this->download->id,
                 'disk' => 'uploaded',
-                'mediakey' => $payload['source']['mediakey'],
+                'mediakey' => $payload['mediakey'],
                 'path' => $path,
                 'title' => $filename,
                 'target' => $payload
@@ -87,7 +88,7 @@ class DownloadFileJob implements ShouldQueue
                     'user_id' => $this->download->user_id,
                     'download_id' => $this->download->id,
                     'disk' => 'uploaded',
-                    'mediakey' => $payload['source']['mediakey'],
+                    'mediakey' => $payload['mediakey'],
                     'path' => $path,
                     'title' => $filename,
                     'target' => $target
@@ -96,11 +97,25 @@ class DownloadFileJob implements ShouldQueue
                 ConvertPreviewVideoJob::dispatch($video)->onQueue('video');
             }
 
+            if (isset($payload['target']['hls'])) {
+                $video = Video::create([
+                    'user_id' => $this->download->user_id,
+                    'download_id' => $this->download->id,
+                    'disk' => 'uploaded',
+                    'mediakey' => $payload['mediakey'],
+                    'path' => $path,
+                    'title' => $filename,
+                    'target' => $target
+                ]);
+
+                ConvertHLSVideoJob::dispatch($video)->onQueue('video');
+            }
+
             $video = Video::create([
                 'user_id' => $this->download->user_id,
                 'download_id' => $this->download->id,
                 'disk' => 'uploaded',
-                'mediakey' => $payload['source']['mediakey'],
+                'mediakey' => $payload['mediakey'],
                 'path' => $path,
                 'title' => $filename,
                 'target' => $target
@@ -112,6 +127,7 @@ class DownloadFileJob implements ShouldQueue
 
     public function failed(\Exception $exception)
     {
+        $this->delete();
         echo $exception->getMessage();
     }
 }

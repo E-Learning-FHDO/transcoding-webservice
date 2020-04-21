@@ -146,7 +146,7 @@ class DownloadQueueController extends Controller
 
         $show->id('ID');
         $show->field('payload', 'Mediakey')->as(function ($payload) {
-            return print_r($payload['source']['mediakey'], true);
+            return print_r($payload['mediakey'], true);
         });
 
         $show->created_at('Created at');

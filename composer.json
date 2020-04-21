@@ -21,7 +21,8 @@
         "laravel/tinker": "^2.0",
         "laravel/ui": "^2.0",
         "php-ffmpeg/php-ffmpeg": "^0.15",
-        "spatie/laravel-directory-cleanup": "^1.5"
+        "spatie/laravel-directory-cleanup": "^1.5",
+      "ext-zip": "*"
     },
     "require-dev": {
         "roave/security-advisories": "dev-master"

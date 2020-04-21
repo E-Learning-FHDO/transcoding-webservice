@@ -28,35 +28,29 @@ class VideoController extends Controller
     {
         $file = Storage::disk('converted')->path($filename);
 
-        Log::info('Plugin tries to download ' . $file);
-        $uid = DB::table('videos')->where('file','=', $filename)->pluck('user_id')->first();
+        Log::info('Plugin tries to download ' . $filename . ' with user id '. Auth::guard('api')->user()->id);
+        //$uid = DB::table('videos')->where('file','=', $filename)->pluck('user_id')->first();
 
-        if($uid != Auth::guard('api')->user()->id)
+        try
         {
-            return response()->json([
-                'message' => 'Unauthorized'
-            ])->setStatusCode(403);
-        }
-
-        if(file_exists($file))
-        {
-            if (request()->isMethod('delete')) {
-                return response()->json([
-                    'message' => 'File is marked as complete and will be deleted'
-                ])->setStatusCode(200);
+            Video::where('file','=', $filename)->where('user_id','=', Auth::guard('api')->user()->id)->firstOrFail();
+            if(file_exists($file))
+            {
+                return response()->download($file, null, [], null);
             }
-            return response()->download($file, null, [], null);
+            return response()->json([
+                'message' => 'File not found'
+            ])->setStatusCode(404);
         }
-
-        return response()->json([
-            'message' => 'File not found'
-        ])->setStatusCode(404);
-
+        catch (\Exception $exception)
+        {
+            return response()->json(['message' => $exception->getMessage()])->setStatusCode(500);
+        }
     }
 
     public function setDownloadFinished($filename)
     {
-        Log::info('Plugin tries to set ' . $filename . ' to finished state');
+        Log::info('Plugin tries to set ' . $filename . ' with user id '. Auth::guard('api')->user()->id . ' to finished state');
         try {
             $video = Video::where('file','=', $filename)->where('user_id','=', Auth::guard('api')->user()->id)->firstOrFail();
             $video->update(['downloaded_at' => Carbon::now()]);
@@ -90,17 +84,24 @@ class VideoController extends Controller
             }
             Storage::disk('converted')->delete($filenames);
             Storage::disk('uploaded')->delete($mediakey);
+            Storage::disk('converted')->deleteDirectory($mediakey);
         }
     }
 
     public static function getStatus($mediakey)
     {
+        Log::info('Plugin tries to get transcoding status for mediakey '. $mediakey);
         try
         {
-            $video = Video::where('mediakey','=', $mediakey)->firstOrFail();
-            $total = Video::where('download_id', $video->download_id)->count();
-            $processed = Video::where('download_id', $video->download_id)->where('processed', 1)->count();
-            return response()->json( ($processed/$total) * 100)->setStatusCode(200);
+            $download = Download::where('mediakey','=', $mediakey)->firstOrFail();
+            if($download->videos->count() > 0)
+            {
+                $video = Video::where('mediakey','=', $mediakey)->firstOrFail();
+                $total = Video::where('download_id', $video->download_id)->count();
+                $processed = Video::where('download_id', $video->download_id)->where('processed', 1)->count();
+                return response()->json( round(($processed/$total) * 100, 0))->setStatusCode(200);
+            }
+            return response()->json( 0)->setStatusCode(200);
         }
 
         catch(\Exception $exception)

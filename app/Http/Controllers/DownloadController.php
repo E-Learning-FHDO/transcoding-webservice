@@ -20,11 +20,12 @@ class DownloadController extends Controller
         $data = $request->all();
 
         $rules = [
+            'mediakey'   => ['required','unique:downloads','alpha_num', 'min:32', 'max:32'],
             'source.url'        => 'required|url',
-            'source.mediakey'   => ['required','alpha_num', 'min:32', 'max:32'],
             'source.created_at' => 'required',
             'target.start'      => 'integer',
             'target.duration'   => 'integer',
+            'target.hls'        => 'boolean',
             'target.format.*.label'       => 'required',
             'target.format.*.size'        => ['required', 'regex:/^(\d+)x(\d+)/'],
             'target.format.*.vbr'         => 'required|integer',
@@ -40,7 +41,7 @@ class DownloadController extends Controller
             $request->offsetUnset('api_token');
             $download = Download::create([
                 'user_id'       => Auth::guard('api')->user()->id,
-                'mediakey'      => $request->json()->get('source.mediakey'),
+                'mediakey'      => $request->json()->get('mediakey'),
                 'payload'       => $request->json()->all()
             ]);
 

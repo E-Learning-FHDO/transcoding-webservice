@@ -26,6 +26,7 @@ class CreateVideosTable extends Migration
             $table->boolean('processed')->default(false);
             $table->datetime('converted_at')->nullable();
             $table->datetime('downloaded_at')->nullable();
+            $table->datetime('failed_at')->nullable();
             $table->timestamps();
         });
     }
