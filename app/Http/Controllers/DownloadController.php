@@ -45,7 +45,7 @@ class DownloadController extends Controller
                 'payload'       => $request->json()->all()
             ]);
 
-            DownloadFileJob::dispatch($download)->onQueue('download');
+            $downloadJobId = DownloadFileJob::dispatch($download)->onQueue('download');
 
             return response()->json([
                 'message' => 'File is queued for download',
@@ -67,7 +67,7 @@ class DownloadController extends Controller
         foreach ($filenames as $filename)
         {
             $filename = json_decode($filename);
-            $files_to_delete[] = $filename->source->mediakey;
+            $files_to_delete[] = $filename->mediakey;
         }
 
         Storage::disk('uploaded')->delete($files_to_delete);

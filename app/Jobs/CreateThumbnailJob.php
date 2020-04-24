@@ -3,6 +3,8 @@
 namespace App\Jobs;
 
 use App\Http\Controllers\TranscodingController;
+use App\Http\Controllers\VideoController;
+use App\Models\DownloadJob;
 use App\Models\Video;
 use Carbon\Carbon;
 use FFMpeg\Coordinate\Dimension;
@@ -29,31 +31,28 @@ class CreateThumbnailJob implements ShouldQueue
 
     public function handle()
     {
-        $existingFailedJobs = Video::where('download_id', '=', $this->video->download_id)->whereNotNull('failed_at')->count() > 0;
+        try {
+            DownloadJob::create([
+                'download_id' => $this->video->download_id,
+                'job_id' => $this->job->getJobId()
+            ]);
 
-        if (!$this->video->getAttribute('converted_at') && !$existingFailedJobs) {
-            try
-            {
-                $transcoder = new TranscodingController($this->video, $this->dimension, $this->attempts());
-                $transcoder->createThumbnail();
-            }
-            catch (\Exception $exception)
-            {
-                echo $exception->getMessage();
-                $this->video->update(['failed_at' => Carbon::now()]);
-            }
-
-        } else {
+            $transcoder = new TranscodingController($this->video, $this->dimension, $this->attempts());
+            $transcoder->createThumbnail();
+        } catch (\Exception $exception) {
+            echo $exception->getMessage();
             Log::info('One or more steps in jobs with download_id ' . $this->video->download_id . ' failed, cancelling');
+            VideoController::deleteAllByMediaKey($this->video->mediakey);
+        } finally {
+            $downloadJob = DownloadJob::where('download_id', $this->video->download_id)->where('job_id', $this->job->getJobId());
+            $downloadJob->delete();
+            $this->delete();
         }
     }
 
     public function failed(\Exception $exception)
     {
-        echo "Exception: " . $exception->getMessage();
-        echo "Code: " . $exception->getCode();
-        $this->delete();
-        $this->video->update(['failed_at' => Carbon::now()]);
+
     }
 
     public function jobs()

@@ -3,10 +3,13 @@
 namespace App\Jobs;
 
 use App\Http\Controllers\TranscodingController;
+use App\Http\Controllers\VideoController;
+use App\Models\DownloadJob;
 use App\Models\Video;
 use Carbon\Carbon;
 use FFMpeg\Coordinate\Dimension;
 use Illuminate\Bus\Queueable;
+use Illuminate\Queue\MaxAttemptsExceededException;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -20,6 +23,8 @@ class ConvertHLSVideoJob implements ShouldQueue
     public $video;
 
     private $dimension;
+
+    private $transcoder;
 
     public function __construct(Video $video)
     {
@@ -35,15 +40,32 @@ class ConvertHLSVideoJob implements ShouldQueue
         $existingFailedJobs = Video::where('download_id', '=', $this->video->download_id)->whereNotNull('failed_at')->count() > 0;
 
         if (!$this->video->getAttribute('converted_at') && !$existingFailedJobs) {
-            try{
-                $transcoder = new TranscodingController($this->video, $this->dimension, $this->attempts());
-                $transcoder->setHLS(true);
-                $transcoder->transcode();
-                $transcoder->executeCallback();
-            }
-            catch(\Exception $exception)
+            try
             {
-                echo "Message: " . $exception->getMessage() . ", Code: " . $exception->getCode();
+                DownloadJob::create([
+                    'download_id' => $this->video->download_id,
+                    'job_id' => $this->job->getJobId()
+                ]);
+
+                $this->transcoder = new TranscodingController($this->video, $this->dimension, $this->attempts());
+                $this->transcoder->setHLS(true);
+                $this->transcoder->transcode();
+                $this->transcoder->executeCallback();
+            }
+            catch (\Exception $exception)
+            {
+                echo "HLSJob Message: " . $exception->getMessage() . ", Code: " . $exception->getCode() . ", Attempt: " . $this->attempts();
+
+                if(is_a($exception, '\GuzzleHttp\Exception\ClientException'))
+                {
+                    $this->failAll();
+                }
+
+                if($this->attempts() > 1)
+                {
+                    $this->failAll();
+                    $this->transcoder->executeErrorCallback($exception->getMessage());
+                }
 
                 if(!$exception->getMessage() === 'Encoding failed')
                 {
@@ -52,18 +74,27 @@ class ConvertHLSVideoJob implements ShouldQueue
                 $this->job->release();
             }
         } else {
-            Log::info('One or more steps in jobs with download_id ' . $this->video->download_id . ' failed, cancelling');
+            $this->failAll();
         }
     }
 
     public function failed($exception)
     {
-        echo $exception->getMessage();
-        //$this->video->update(['failed_at' => Carbon::now()]);
+
     }
 
     public function jobs()
     {
         return $this->onQueue($this->queue);
+    }
+
+    private function failAll()
+    {
+        Log::info('One or more steps in jobs with download_id ' . $this->video->download_id . ' failed, cancelling');
+        DownloadFileJob::killAssociatedJobs($this->video->download_id);
+        VideoController::deleteAllByMediaKey($this->video->mediakey);
+        $downloadJob = DownloadJob::where('download_id', $this->video->download_id)->where('job_id', $this->job->getJobId());
+        $downloadJob->delete();
+        $this->delete();
     }
 }

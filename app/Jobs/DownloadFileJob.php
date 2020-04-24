@@ -3,14 +3,18 @@
 namespace App\Jobs;
 
 use App\Models\Download;
+use App\Models\DownloadJob;
 use App\Models\Video;
 use App\User;
 use GuzzleHttp\RequestOptions;
 use Illuminate\Bus\Queueable;
+use Illuminate\Queue\Jobs\Job;
+use Illuminate\Queue\Queue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use GuzzleHttp\Client;
@@ -62,7 +66,7 @@ class DownloadFileJob implements ShouldQueue
                     'title' => $filename,
                     'target' => $payload,
                 ]);
-                CreateThumbnailJob::dispatch($thumbnail_item)->onQUeue('video');
+                $thumbnailJobId = CreateThumbnailJob::dispatch($thumbnail_item)->onQUeue('video');
             }
         }
 
@@ -77,7 +81,7 @@ class DownloadFileJob implements ShouldQueue
                 'target' => $payload
             ]);
 
-            CreateSpritemapJob::dispatch($spritemap)->onQUeue('video');
+            $spritemapJobId = CreateSpritemapJob::dispatch($spritemap)->onQUeue('video');
         }
 
         foreach ($payload['target']['format'] as $target) {
@@ -94,7 +98,9 @@ class DownloadFileJob implements ShouldQueue
                     'target' => $target
                 ]);
 
-                ConvertPreviewVideoJob::dispatch($video)->onQueue('video');
+                $previewVideoJob = new ConvertPreviewVideoJob($video);
+                $previewVideoJob->onQueue('video');
+                $previewVideoJobId = dispatch($previewVideoJob);
             }
 
             if (isset($payload['target']['hls'])) {
@@ -108,7 +114,9 @@ class DownloadFileJob implements ShouldQueue
                     'target' => $target
                 ]);
 
-                ConvertHLSVideoJob::dispatch($video)->onQueue('video');
+                $hlsVideoJob = new ConvertHLSVideoJob($video);
+                $hlsVideoJob->onQueue('video');
+                $hlsVideoJobId = dispatch($hlsVideoJob);
             }
 
             $video = Video::create([
@@ -121,7 +129,9 @@ class DownloadFileJob implements ShouldQueue
                 'target' => $target
             ]);
 
-            ConvertVideoJob::dispatch($video)->onQueue('video');
+            $videoJob = new ConvertVideoJob($video);
+            $videoJob->onQueue('video');
+            $videoJobId = dispatch($videoJob);
         }
     }
 
@@ -129,5 +139,23 @@ class DownloadFileJob implements ShouldQueue
     {
         $this->delete();
         echo $exception->getMessage();
+    }
+
+    public static function killAssociatedJobs($download_id)
+    {
+        $downloadJobs = DownloadJob::where('download_id','=', $download_id);
+        foreach($downloadJobs as $downloadJob)
+        {
+            $job = DB::table('jobs')->where('id','=', $downloadJob->job_id)->first();
+            Log::info('Deleting job ' . $job->id);
+            try {
+                $downloadJob->delete();
+                $job->delete();
+            }
+            catch (\Exception $exception)
+            {
+                echo $exception->getMessage();
+            }
+        }
     }
 }

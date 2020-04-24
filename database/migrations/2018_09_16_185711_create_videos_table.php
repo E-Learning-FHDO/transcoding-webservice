@@ -21,7 +21,7 @@ class CreateVideosTable extends Migration
             $table->string('mediakey');
             $table->string('disk');
             $table->string('path');
-            $table->string('target');
+            $table->longText('target');
             $table->string('file')->nullable();
             $table->boolean('processed')->default(false);
             $table->datetime('converted_at')->nullable();

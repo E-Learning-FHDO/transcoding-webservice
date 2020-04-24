@@ -30,6 +30,7 @@ class TranscodingController extends Controller
     private $user;
     private $profile;
     private $attempts;
+    private $progress;
 
     public function __construct(Video $video, Dimension $dimension, $attempts)
     {
@@ -82,7 +83,7 @@ class TranscodingController extends Controller
         }
 
         $h264->on('progress', function ($video, $format, $percentage) use ($converted_name) {
-            if (($percentage % 5) == 0) {
+            if (($percentage % 5) === 0) {
                 $dt = Carbon::now()->toDateTimeString();
                 echo "$dt : $percentage% of $converted_name transcoded\n";
                 $this->progress = $percentage;
@@ -318,6 +319,23 @@ class TranscodingController extends Controller
                 'api_token' => $api_token,
                 'mediakey' => $this->video->mediakey,
                 'finished' => true
+            ]
+        ]);
+    }
+
+    public function executeErrorCallback($message)
+    {
+        Log::info('Executing error callback for mediakey ' . $this->video->mediakey);
+        $guzzle = new Client();
+
+        $api_token = $this->user->api_token;
+        $url = $this->user->url . '/transcoderwebservice/callback';
+
+        $response = $guzzle->post($url, [
+            RequestOptions::JSON => [
+                'api_token' => $api_token,
+                'mediakey' => $this->video->mediakey,
+                'error' => [ 'message' => $message ]
             ]
         ]);
     }
