@@ -60,7 +60,7 @@ class TranscodingController extends Controller
         $is360Video = $this->check360Video($source_format);
 
         if ($this->attempts > 1) {
-            echo Carbon::now()->toDateTimeString() . " Failed to encode $converted_name with " . $this->profile->encoder . " codec\n";
+            Log::info("Failed to encode $converted_name with " . $this->profile->encoder . " codec");
             $this->profile = Profile::find($this->user->profile->fallback_id);
         }
 
@@ -76,7 +76,7 @@ class TranscodingController extends Controller
 
         $video = $this->applyFilters($video);
 
-        echo Carbon::now()->toDateTimeString() . " Trying to encode clip $converted_name with " . $this->profile->encoder . " codec ..\n";
+        Log::info("Trying to encode clip $converted_name with " . $this->profile->encoder . " codec ..");
 
         if ($is360Video) {
             $video->filters()->addMetadata(['side_data_list' => $source_format->get('side_data_list')])->synchronize();
@@ -85,13 +85,12 @@ class TranscodingController extends Controller
         $h264->on('progress', function ($video, $format, $percentage) use ($converted_name) {
             if (($percentage % 5) === 0) {
                 $dt = Carbon::now()->toDateTimeString();
-                echo "$dt : $percentage% of $converted_name transcoded\n";
+                Log::info("$percentage% of $converted_name transcoded");
                 $this->progress = $percentage;
             }
         });
 
         $video->save($h264, Storage::disk('converted')->path($this->getTargetFile()));
-
         $this->video->update([
             'converted_at' => Carbon::now(),
             'processed' => true,
@@ -473,7 +472,7 @@ class TranscodingController extends Controller
 
             case 'h264_nvenc':
             {
-                $scale_nvenc = 'scale_nvenc=w=\'if(gt(a\,'.$w.'/'.$h.')\,'.$w.'\,oh*a)\':h=\'if(gt(a\,'.$w.'/'.$h.')\,ow/a\,'.$h.')\':interp_algo=super';
+                $scale_nvenc = 'scale_npp=w=\'if(gt(a\,'.$w.'/'.$h.')\,'.$w.'\,oh*a)\':h=\'if(gt(a\,'.$w.'/'.$h.')\,ow/a\,'.$h.')\':interp_algo=super';
                 $video->filters()->custom($scale_nvenc)->synchronize();
                 return $video;
             }

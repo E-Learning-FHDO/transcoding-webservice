@@ -20,7 +20,7 @@
         "laravel/framework": "^7.5",
         "laravel/tinker": "^2.0",
         "laravel/ui": "^2.0",
-        "php-ffmpeg/php-ffmpeg": "^0.15",
+        "php-ffmpeg/php-ffmpeg": "^0.16",
         "spatie/laravel-directory-cleanup": "^1.5",
       "ext-zip": "*"
     },

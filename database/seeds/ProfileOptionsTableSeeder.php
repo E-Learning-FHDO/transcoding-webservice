@@ -14,13 +14,13 @@ class ProfileOptionsTableSeeder extends Seeder {
                 'id' => 1,
                 'profile_id'      => 2,
                 'key'      => '-hwaccel',
-                'value'      => 'cuvid',
+                'value'      => 'cuda',
             ),
             array(
                 'id' => 2,
                 'profile_id'      => 2,
-                'key'      => '-c:v',
-                'value'      => 'h264_cuvid',
+                'key'      => '-hwaccel_output_format',
+                'value'      => 'cuda',
             ),
             array(
                 'id' => 3,

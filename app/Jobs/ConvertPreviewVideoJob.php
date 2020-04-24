@@ -55,8 +55,7 @@ class ConvertPreviewVideoJob implements ShouldQueue
             }
             catch (\Exception $exception)
             {
-                echo "PreviewVideoJob Message: " . $exception->getMessage() . ", Code: " . $exception->getCode() . ", Attempt: " . $this->attempts();
-
+                Log::info("PreviewVideoJob Message: " . $exception->getMessage() . ", Code: " . $exception->getCode() . ", Attempt: " . $this->attempts());
                 if(is_a($exception, '\GuzzleHttp\Exception\ClientException'))
                 {
                     $this->failAll();
