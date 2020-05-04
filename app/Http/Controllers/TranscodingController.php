@@ -57,8 +57,6 @@ class TranscodingController extends Controller
             ->videos()
             ->first();
 
-        $is360Video = $this->check360Video($source_format);
-
         if ($this->attempts > 1) {
             Log::info("Failed to encode $converted_name with " . $this->profile->encoder . " codec");
             $this->profile = Profile::find($this->user->profile->fallback_id);
@@ -77,10 +75,6 @@ class TranscodingController extends Controller
         $video = $this->applyFilters($video);
 
         Log::info("Trying to encode clip $converted_name with " . $this->profile->encoder . " codec ..");
-
-        if ($is360Video) {
-            $video->filters()->addMetadata(['side_data_list' => $source_format->get('side_data_list')])->synchronize();
-        }
 
         $h264->on('progress', function ($video, $format, $percentage) use ($converted_name) {
             if (($percentage % 5) === 0) {
@@ -292,7 +286,7 @@ class TranscodingController extends Controller
                         'filesize' => $target_format->get('filesize'),
                         'width' => $target_format->get('width'),
                         'height' => $target_format->get('height'),
-                        'is360video' => $this->check360Video($source_format)
+                        'source_is360video' => $this->check360Video($source_format)
                     ]
                 ]);
         }
