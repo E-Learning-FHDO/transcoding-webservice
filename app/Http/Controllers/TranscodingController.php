@@ -31,6 +31,7 @@ class TranscodingController extends Controller
     private $profile;
     private $attempts;
     private $progress;
+    private $pid;
 
     public function __construct(Video $video, Dimension $dimension, $attempts)
     {
@@ -41,6 +42,12 @@ class TranscodingController extends Controller
 
     public function transcode()
     {
+        $pid = $this->pid = getmypid();
+
+        $this->video->update([
+            'processed' => Video::PROCESSING,
+        ]);
+
         $this->prepare();
 
         $target = $this->video->target;
@@ -50,17 +57,11 @@ class TranscodingController extends Controller
 
         $converted_name = $this->getTargetFile();
 
-        $ffprobe = FFMpeg\FFProbe::create($this->getFFmpegConfig());
-
-        $source_format = $ffprobe
-            ->streams(Storage::disk('uploaded')->path($this->video->path))
-            ->videos()
-            ->first();
-
         if ($this->attempts > 1) {
             Log::info("Failed to encode $converted_name with " . $this->profile->encoder . " codec");
             $this->profile = Profile::find($this->user->profile->fallback_id);
         }
+        Log::info("Trying to encode clip $converted_name with " . $this->profile->encoder . " codec ..");
 
         $h264 = (new H264('aac', $this->profile->encoder))
             ->setKiloBitrate($target['vbr'])
@@ -74,12 +75,9 @@ class TranscodingController extends Controller
 
         $video = $this->applyFilters($video);
 
-        Log::info("Trying to encode clip $converted_name with " . $this->profile->encoder . " codec ..");
-
-        $h264->on('progress', function ($video, $format, $percentage) use ($converted_name) {
+        $h264->on('progress', function ($video, $format, $percentage) use ($pid, $converted_name) {
             if (($percentage % 5) === 0) {
-                $dt = Carbon::now()->toDateTimeString();
-                Log::info("$percentage% of $converted_name transcoded");
+                Log::info("PID: $pid, $percentage% of $converted_name transcoded");
                 $this->progress = $percentage;
             }
         });
@@ -87,7 +85,7 @@ class TranscodingController extends Controller
         $video->save($h264, Storage::disk('converted')->path($this->getTargetFile()));
         $this->video->update([
             'converted_at' => Carbon::now(),
-            'processed' => true,
+            'processed' => Video::PROCESSED,
             'file' => $this->getTargetFile()
         ]);
     }
@@ -109,7 +107,7 @@ class TranscodingController extends Controller
 
         $this->video->update([
             'converted_at' => Carbon::now(),
-            'processed' => true,
+            'processed' => Video::PROCESSED,
             'file' => $converted_name
         ]);
 
@@ -158,7 +156,7 @@ class TranscodingController extends Controller
 
         $this->video->update([
             'converted_at' => Carbon::now(),
-            'processed' => true,
+            'processed' => Video::PROCESSED,
             'file' => $converted_name
         ]);
 
@@ -254,7 +252,8 @@ class TranscodingController extends Controller
                         'size' => $this->video->target['size'],
                         'extension' => $this->video->target['extension'],
                         'created_at' => $this->video->target['created_at'],
-                        'default' => isset($this->video->target['default']) ? $this->video->target['default'] : false
+                        'default' => isset($this->video->target['default']) ? $this->video->target['default'] : false,
+                        'checksum' => md5_file(Storage::disk('converted')->path($archiveFile))
                     ]
                 ]);
         }
@@ -277,7 +276,8 @@ class TranscodingController extends Controller
                     'mediakey' => $this->video->mediakey,
                     'medium' => [
                         'label' => $this->video->target['label'],
-                        'url' => route('getFile', $this->getTargetFile())
+                        'url' => route('getFile', $this->getTargetFile()),
+                        'checksum' => md5_file(Storage::disk('converted')->path($this->getTargetFile()))
                     ],
                     'properties' => [
                         'source_width' => $source_format->get('width'),
@@ -293,8 +293,9 @@ class TranscodingController extends Controller
 
         $response = $guzzle->post($url, $requestOptions);
 
-        if ($this->downloadComplete())
+        if ($this->downloadComplete() && $this->video->download()->get('processed'))
         {
+            $this->video->download()->update(['processed' => true]);
             $this->executeFinalCallback();
         }
     }
@@ -339,7 +340,7 @@ class TranscodingController extends Controller
         try {
             $video = Video::where('mediakey', '=', $this->video->mediakey)->firstOrFail();
             $total = Video::where('download_id', $video->download_id)->count();
-            $processed = Video::where('download_id', $video->download_id)->where('processed', 1)->whereNotNull('downloaded_at')->count();
+            $processed = Video::where('download_id', $video->download_id)->where('processed', Video::PROCESSED)->whereNotNull('downloaded_at')->count();
             if ($total === $processed) {
                 Log::info('All downloads are complete for mediakey ' . $this->video->mediakey . " ($processed of $total)");
                 return true;
@@ -347,30 +348,9 @@ class TranscodingController extends Controller
             Log::info('Downloads are not yet complete for mediakey ' . $this->video->mediakey . " ($processed of $total)");
             return false;
         } catch (\Exception $exception) {
-            Log::info('Downloads are incomplete for mediakey ' . $this->video->mediakey . " ($processed of $total)");
+            Log::info('Downloads are incomplete for mediakey ' . $this->video->mediakey);
             return false;
         }
-    }
-
-    public function createHLSPlaylist()
-    {
-        $target = $this->video->target;
-        $m3u8file = $this->video->path . DIRECTORY_SEPARATOR . 'main_' . $this->video->path . '_' . $target['created_at'] . '_' . $target['extension'] . '.m3u8';
-
-        $m3u8Path = Storage::disk('converted')->path($m3u8file);
-        Log::info('Creating M3U8 ' . $m3u8Path);
-        if(!Storage::disk('converted')->exists($m3u8file))
-        {
-            $m3u8header = '#EXTM3U'.PHP_EOL.'#EXT-X-VERSION:3'.PHP_EOL;
-            Storage::put($m3u8file, $m3u8header);
-            Log::info('Creating M3U8 header ' . $m3u8header);
-        }
-        $m3u8metadata = '#EXT-X-STREAM-INF:BANDWIDTH='.$this->video->target['vbr'].'000,RESOLUTION='.$this->video->target['size'].PHP_EOL;
-        Storage::disk('converted')->append($m3u8file, $m3u8metadata);
-        Storage::disk('converted')->append($m3u8file, $this->getTargetFile().PHP_EOL);
-        Log::info('Appending M3U8 metadata ' . $m3u8metadata);
-        Log::info('Appending M3U8 file ' . basename($this->getTargetFile()).PHP_EOL);
-
     }
 
     protected function check360Video($source_format)

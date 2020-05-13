@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Jobs\ConvertVideoJob;
 use App\Models\Download;
+use App\Models\DownloadJob;
 use App\Models\Video;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -50,18 +51,12 @@ class VideoController extends Controller
 
     public function setDownloadFinished($filename)
     {
-        Log::info('Plugin tries to set ' . $filename . ' with user id '. Auth::guard('api')->user()->id . ' to finished state');
-        try {
-            $video = Video::where('file','=', $filename)->where('user_id','=', Auth::guard('api')->user()->id)->firstOrFail();
+        Log::info('Plugin tries to set file ' . $filename . ' with user id '. Auth::guard('api')->user()->id . ' to finished state');
+
+            $video = Video::where('file','=', $filename);
             $video->update(['downloaded_at' => Carbon::now()]);
+            Log::info('Video '. $video->pluck('file') . ' was set to finished state');
             return response()->json(['message' => 'ok'])->setStatusCode(200);
-        }
-        catch (\Exception $exception)
-        {
-            return response()->json([
-                'message' => $exception
-            ])->setStatusCode(500);
-        }
     }
 
     public static function deleteAllByMediaKey($mediakey)
@@ -72,6 +67,7 @@ class VideoController extends Controller
             $filenames = DB::table('videos')->select('file')->whereIn('mediakey', explode(',', $mediakey))->pluck('file')->toArray();
 
             $deleteVideo = Video::where('mediakey', $mediakey)->get();
+            DownloadJob::where('download_id','=', $deleteVideo->first()->download_id)->delete();
 
             foreach($deleteVideo as $video)
             {

@@ -116,12 +116,13 @@ class TranscodingQueueController extends Controller
         $grid->user()->name()->display(function ($name){
             return "<a href='users/$this->id'>$name</a>";
         });
-
+        $grid->mediakey('Mediakey');
+        $grid->title('Title');
         $grid->file('File')->display(function ($file){
             return "<a href='transcodingqueue/$this->id'>$file</a>";
         });
 
-        $grid->processed('Processed')->using(['0' => 'No', '1' => 'Yes']);
+        $grid->processed('Processed')->using(['0' => 'No', '1' => 'Yes', '2' => 'Processing']);
         $grid->created_at('Created at');
         $grid->converted_at('Converted at');
         $grid->downloaded_at('Downloaded at');

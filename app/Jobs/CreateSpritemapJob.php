@@ -31,25 +31,10 @@ class CreateSpritemapJob implements ShouldQueue
 
     public function handle()
     {
-        try {
-            DownloadJob::create([
-                'download_id' => $this->video->download_id,
-                'job_id' => $this->job->getJobId()
-            ]);
+        $transcoder = new TranscodingController($this->video, $this->dimension, $this->attempts());
+        $transcoder->createSpritemap();
 
-            $transcoder = new TranscodingController($this->video, $this->dimension, $this->attempts());
-            $transcoder->createSpritemap();
 
-        } catch (\Exception $exception) {
-
-            echo $exception->getMessage();
-            Log::info('One or more steps in jobs with download_id ' . $this->video->download_id . ' failed, cancelling');
-            VideoController::deleteAllByMediaKey($this->video->mediakey);
-        } finally {
-            $downloadJob = DownloadJob::where('download_id', $this->video->download_id)->where('job_id', $this->job->getJobId());
-            $downloadJob->delete();
-            $this->delete();
-        }
     }
 
     public function failed(\Exception $exception)

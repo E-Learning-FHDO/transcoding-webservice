@@ -42,18 +42,22 @@ class ConvertVideoJob implements ShouldQueue
         {
             try
             {
-                DownloadJob::create([
-                    'download_id' => $this->video->download_id,
-                    'job_id' => $this->job->getJobId()
-                ]);
+                if($this->video->processed !== Video::PROCESSING)
+                {
+                    DownloadJob::create([
+                        'download_id' => $this->video->download_id,
+                        'job_id' => $this->job->getJobId()
+                    ]);
 
-                $this->transcoder = new TranscodingController($this->video, $this->dimension, $this->attempts());
-                $this->transcoder->transcode();
-                $this->transcoder->executeCallback();
+                    $this->transcoder = new TranscodingController($this->video, $this->dimension, $this->attempts());
+                    $this->transcoder->transcode();
+                    $this->transcoder->executeCallback();
+                }
             }
             catch (\Exception $exception)
             {
                 Log::info("ConvertVideoJob Message: " . $exception->getMessage() . ", Code: " . $exception->getCode() . ", Attempt: " . $this->attempts());
+                $this->video->update(['processed' => Video::FAILED]);
 
                 if(is_a($exception, '\GuzzleHttp\Exception\ClientException'))
                 {

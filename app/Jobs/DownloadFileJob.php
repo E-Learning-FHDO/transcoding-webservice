@@ -48,10 +48,6 @@ class DownloadFileJob implements ShouldQueue
 
         Storage::disk('uploaded')->put($path, $response->getBody());
 
-        $this->download->update(['processed' => true]);
-
-        $filename = basename($payload['source']['url']);
-
         if (isset($payload['thumbnail'])) {
             foreach ($payload['thumbnail'] as $thumbnail_key => $thumbnail_value) {
                 $thumbnail = array();
@@ -63,7 +59,7 @@ class DownloadFileJob implements ShouldQueue
                     'disk' => 'uploaded',
                     'mediakey' => $payload['mediakey'],
                     'path' => $path,
-                    'title' => $filename,
+                    'title' => ConvertHLSVideoJob::class,
                     'target' => $payload,
                 ]);
                 $thumbnailJobId = CreateThumbnailJob::dispatch($thumbnail_item)->onQUeue('video');
@@ -77,7 +73,7 @@ class DownloadFileJob implements ShouldQueue
                 'disk' => 'uploaded',
                 'mediakey' => $payload['mediakey'],
                 'path' => $path,
-                'title' => $filename,
+                'title' => CreateSpritemapJob::class,
                 'target' => $payload
             ]);
 
@@ -94,7 +90,7 @@ class DownloadFileJob implements ShouldQueue
                     'disk' => 'uploaded',
                     'mediakey' => $payload['mediakey'],
                     'path' => $path,
-                    'title' => $filename,
+                    'title' => ConvertPreviewVideoJob::class,
                     'target' => $target
                 ]);
 
@@ -110,7 +106,7 @@ class DownloadFileJob implements ShouldQueue
                     'disk' => 'uploaded',
                     'mediakey' => $payload['mediakey'],
                     'path' => $path,
-                    'title' => $filename,
+                    'title' => ConvertHLSVideoJob::class,
                     'target' => $target
                 ]);
 
@@ -125,7 +121,7 @@ class DownloadFileJob implements ShouldQueue
                 'disk' => 'uploaded',
                 'mediakey' => $payload['mediakey'],
                 'path' => $path,
-                'title' => $filename,
+                'title' => ConvertVideoJob::class,
                 'target' => $target
             ]);
 

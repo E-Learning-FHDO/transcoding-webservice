@@ -118,11 +118,12 @@ class DownloadQueueController extends Controller
             return "<a href='users/$this->id'>$name</a>";
         });
 
+        $grid->mediakey('Mediakey');
         $grid->column('payload', 'URL')->display(function($payload) {
             return '<a target="_blank" href="' . $payload['source']['url'] . '">'. $payload['source']['url'] .'</a>';
         });
 
-        $grid->processed('Processed')->using(['0' => 'No', '1' => 'Yes']);
+        $grid->processed('Processed')->using(['0' => 'No', '1' => 'Yes', '2' => 'Processing']);
         $grid->created_at('Created at');
         //$grid->updated_at('Updated at');
 

@@ -17,6 +17,11 @@ class Video extends Model
 
     protected $casts = ['target' => 'json'];
 
+    public const UNPROCESSED = 0;
+    public const PROCESSED = 1;
+    public const PROCESSING = 2;
+    public const FAILED = 3;
+
     public function user()
     {
         return $this->belongsTo(User::class, 'user_id', 'id');

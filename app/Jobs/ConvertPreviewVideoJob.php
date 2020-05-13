@@ -43,15 +43,17 @@ class ConvertPreviewVideoJob implements ShouldQueue
         if (!$this->video->getAttribute('converted_at') && !$existingFailedJobs) {
             try
             {
-                DownloadJob::create([
-                    'download_id' => $this->video->download_id,
-                    'job_id' => $this->job->getJobId()
-                ]);
+                if($this->video->processed !== Video::PROCESSING) {
+                    DownloadJob::create([
+                        'download_id' => $this->video->download_id,
+                        'job_id' => $this->job->getJobId()
+                    ]);
 
-                $this->transcoder = new TranscodingController($this->video, $this->dimension, $this->attempts());
-                $this->transcoder->setPreview(true);
-                $this->transcoder->transcode();
-                $this->transcoder->executeCallback();
+                    $this->transcoder = new TranscodingController($this->video, $this->dimension, $this->attempts());
+                    $this->transcoder->setPreview(true);
+                    $this->transcoder->transcode();
+                    $this->transcoder->executeCallback();
+                }
             }
             catch (\Exception $exception)
             {
