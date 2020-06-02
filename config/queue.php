@@ -13,7 +13,7 @@ return [
     |
     */
 
-    'default' => env('QUEUE_CONNECTION', 'sync'),
+    'default' => env('QUEUE_CONNECTION', 'database'),
 
     /*
     |--------------------------------------------------------------------------
@@ -41,11 +41,40 @@ return [
             'retry_after' => 90,
         ],
 
+        'database_download' => [
+            'driver' => 'database',
+            'table' => 'jobs',
+            'queue' => 'download',
+            'retry_after' => 90,
+        ],
+
+        'database_video' => [
+            'driver' => 'database',
+            'table' => 'jobs',
+            'queue' => 'video',
+            'retry_after' => 90,
+        ],
+
         'beanstalkd' => [
             'driver' => 'beanstalkd',
-            'host' => 'localhost',
+            'host' => env('BEANSTALKD_HOST', 'localhost'),
             'queue' => 'default',
-            'retry_after' => 90,
+            'retry_after' => 42300,
+            'block_for' => 0,
+        ],
+
+        'beanstalkd_download' => [
+            'driver' => 'beanstalkd',
+            'host' => env('BEANSTALKD_HOST', 'localhost'),
+            'queue' => 'download',
+            'retry_after' => 42300,
+            'block_for' => 0,
+        ],
+        'beanstalkd_video' => [
+            'driver' => 'beanstalkd',
+            'host' => env('BEANSTALKD_HOST', 'localhost'),
+            'queue' => 'video',
+            'retry_after' => 42300,
             'block_for' => 0,
         ],
 

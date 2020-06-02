@@ -7,6 +7,12 @@ use Illuminate\Database\Eloquent\Model;
 
 class Download extends Model
 {
+    public const UNPROCESSED = 0;
+    public const PROCESSED = 1;
+    public const PROCESSING = 2;
+    public const FAILED = 3;
+
+
     protected $fillable = ['user_id', 'mediakey', 'payload', 'processed'];
 
     protected $guarded = [];

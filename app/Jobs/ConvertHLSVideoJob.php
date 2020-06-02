@@ -60,11 +60,13 @@ class ConvertHLSVideoJob implements ShouldQueue
 
                 if(is_a($exception, '\GuzzleHttp\Exception\ClientException'))
                 {
+			Log::info('HTTP Client exception for download_id ' . $this->video->download_id);
                     $this->failAll();
                 }
 
                 if($this->attempts() > 1)
                 {
+		Log::info('Maximal attempts for download_id ' . $this->video->download_id);
                     $this->failAll();
                     $this->transcoder->executeErrorCallback($exception->getMessage());
                 }

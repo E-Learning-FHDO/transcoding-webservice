@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Format\Video\H264;
+use App\Models\Download;
 use App\Models\Profile;
 use App\Models\Video;
 use App\User;
@@ -42,6 +43,7 @@ class TranscodingController extends Controller
 
     public function transcode()
     {
+	    Log::debug("Entering " . __METHOD__);
         $pid = $this->pid = getmypid();
 
         $this->video->update([
@@ -88,10 +90,12 @@ class TranscodingController extends Controller
             'processed' => Video::PROCESSED,
             'file' => $this->getTargetFile()
         ]);
+	    Log::debug("Exiting " . __METHOD__);
     }
 
     public function createThumbnail()
     {
+	    Log::debug("Entering " . __METHOD__);
         $payload = $this->video->target;
         $target = $payload['thumbnail_item'];
         $user = User::find($this->video->user_id);
@@ -125,10 +129,12 @@ class TranscodingController extends Controller
                 ]
             ]
         ]);
+	    Log::debug("Exiting " . __METHOD__);
     }
 
     public function createSpritemap()
     {
+	    Log::debug("Entering " . __METHOD__);
         $payload = $this->video->target;
         $spritemap = $payload['spritemap'];
 
@@ -175,6 +181,7 @@ class TranscodingController extends Controller
                 ]
             ]
         ]);
+	    Log::debug("Exiting " . __METHOD__);
     }
 
     public function setPreview($preview = true)
@@ -209,6 +216,7 @@ class TranscodingController extends Controller
 
     public function executeCallback()
     {
+	    Log::debug("Entering " . __METHOD__);
         $guzzle = new Client();
         $api_token = $this->user->api_token;
         $url = $this->user->url . '/transcoderwebservice/callback';
@@ -295,13 +303,15 @@ class TranscodingController extends Controller
 
         if ($this->downloadComplete() && $this->video->download()->get('processed'))
         {
-            $this->video->download()->update(['processed' => true]);
+            $this->video->download()->update(['processed' => Download::PROCESSED]);
             $this->executeFinalCallback();
         }
+	    Log::debug("Exiting " . __METHOD__);
     }
 
     public function executeFinalCallback()
     {
+	    Log::debug("Entering " . __METHOD__);
         Log::info('Executing final callback for mediakey ' . $this->video->mediakey);
         $guzzle = new Client();
 
@@ -315,10 +325,12 @@ class TranscodingController extends Controller
                 'finished' => true
             ]
         ]);
+	    Log::debug("Exiting " . __METHOD__);
     }
 
     public function executeErrorCallback($message)
     {
+	    Log::debug("Entering " . __METHOD__);
         Log::info('Executing error callback for mediakey ' . $this->video->mediakey);
         $guzzle = new Client();
 
@@ -332,10 +344,12 @@ class TranscodingController extends Controller
                 'error' => [ 'message' => $message ]
             ]
         ]);
+	    Log::debug("Exiting " . __METHOD__);
     }
 
     public function downloadComplete()
     {
+	    Log::debug("Entering " . __METHOD__);
         Log::info('Check if all downloads are complete for mediakey ' . $this->video->mediakey);
         try {
             $video = Video::where('mediakey', '=', $this->video->mediakey)->firstOrFail();
@@ -343,12 +357,15 @@ class TranscodingController extends Controller
             $processed = Video::where('download_id', $video->download_id)->where('processed', Video::PROCESSED)->whereNotNull('downloaded_at')->count();
             if ($total === $processed) {
                 Log::info('All downloads are complete for mediakey ' . $this->video->mediakey . " ($processed of $total)");
+                Log::debug("Exiting " . __METHOD__);
                 return true;
             }
             Log::info('Downloads are not yet complete for mediakey ' . $this->video->mediakey . " ($processed of $total)");
+            Log::debug("Exiting " . __METHOD__);
             return false;
         } catch (\Exception $exception) {
             Log::info('Downloads are incomplete for mediakey ' . $this->video->mediakey);
+            Log::debug("Exiting " . __METHOD__);
             return false;
         }
     }
