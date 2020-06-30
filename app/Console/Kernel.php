@@ -13,7 +13,7 @@ class Kernel extends ConsoleKernel
      * @var array
      */
     protected $commands = [
-        //
+         Commands\CleanupTranscode::class
     ];
 
     /**
@@ -25,6 +25,7 @@ class Kernel extends ConsoleKernel
     protected function schedule(Schedule $schedule)
     {
         $schedule->command('clean:directories')->everyTenMinutes();
+        $schedule->command('transcode:cleanup')->everyTenMinutes();
     }
 
     /**
