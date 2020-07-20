@@ -33,6 +33,7 @@ class TranscodingController extends Controller
     private $attempts;
     private $progress;
     private $pid;
+    private $error;
 
     public function __construct(Video $video, Dimension $dimension, $attempts)
     {
@@ -43,7 +44,7 @@ class TranscodingController extends Controller
 
     public function transcode()
     {
-	    Log::debug("Entering " . __METHOD__);
+	Log::debug("Entering " . __METHOD__);
         $pid = $this->pid = getmypid();
 
         $this->video->update([
@@ -64,6 +65,7 @@ class TranscodingController extends Controller
             $this->profile = Profile::find($this->user->profile->fallback_id);
         }
         Log::info("Trying to encode clip $converted_name with " . $this->profile->encoder . " codec ..");
+        Log::debug("Target:  ". print_r($this->video->target, true));
 
         $h264 = (new H264('aac', $this->profile->encoder))
             ->setKiloBitrate($target['vbr'])
@@ -84,6 +86,7 @@ class TranscodingController extends Controller
             }
         });
 
+        Log::debug('Executing ' . print_r($video->getFinalCommand($h264, Storage::disk('converted')->path($this->getTargetFile())), true));
         $video->save($h264, Storage::disk('converted')->path($this->getTargetFile()));
         $this->video->update([
             'converted_at' => Carbon::now(),
@@ -95,7 +98,7 @@ class TranscodingController extends Controller
 
     public function createThumbnail()
     {
-	    Log::debug("Entering " . __METHOD__);
+	Log::debug("Entering " . __METHOD__);
         $payload = $this->video->target;
         $target = $payload['thumbnail_item'];
         $user = User::find($this->video->user_id);
@@ -129,7 +132,7 @@ class TranscodingController extends Controller
                 ]
             ]
         ]);
-	    Log::debug("Exiting " . __METHOD__);
+	Log::debug("Exiting " . __METHOD__);
     }
 
     public function createSpritemap()
@@ -216,7 +219,7 @@ class TranscodingController extends Controller
 
     public function executeCallback()
     {
-	    Log::debug("Entering " . __METHOD__);
+	Log::debug("Entering " . __METHOD__);
         $guzzle = new Client();
         $api_token = $this->user->api_token;
         $url = $this->user->url . '/transcoderwebservice/callback';
@@ -306,7 +309,7 @@ class TranscodingController extends Controller
             $this->video->download()->update(['processed' => Download::PROCESSED]);
             $this->executeFinalCallback();
         }
-	    Log::debug("Exiting " . __METHOD__);
+	Log::debug("Exiting " . __METHOD__);
     }
 
     public function executeFinalCallback()
@@ -463,7 +466,8 @@ class TranscodingController extends Controller
 
             case 'h264_nvenc':
             {
-                $scale_nvenc = 'scale_npp=w=\'if(gt(a\,'.$w.'/'.$h.')\,'.$w.'\,oh*a)\':h=\'if(gt(a\,'.$w.'/'.$h.')\,ow/a\,'.$h.')\':interp_algo=super';
+                $scale_nvenc = 'hwupload,scale_npp=w='.$w.':h='.$h.':force_original_aspect_ratio=decrease:interp_algo=super';
+                //$scale_nvenc = 'scale_npp=w=\'if(gt(a\,'.$w.'/'.$h.')\,'.$w.'\,oh*a)\':h=\'if(gt(a\,'.$w.'/'.$h.')\,ow/a\,'.$h.')\':interp_algo=super';
                 $video->filters()->custom($scale_nvenc)->synchronize();
                 return $video;
             }

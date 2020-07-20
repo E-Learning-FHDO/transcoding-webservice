@@ -32,7 +32,20 @@ class CreateThumbnailJob implements ShouldQueue
     public function handle()
     {
         $transcoder = new TranscodingController($this->video, $this->dimension, $this->attempts());
-        $transcoder->createThumbnail();
+	try {
+        	$transcoder->createThumbnail();
+            }
+            catch (\Exception $exception)
+            {
+                Log::info("CreateThumbnailJob Message: " . $exception->getMessage() . ", Code: " . $exception->getCode() . ", Attempt: " . $this->attempts());
+                $this->video->update(['processed' => Video::FAILED]);
+
+                Log::info('Exception ' . $exception->getTraceAsString());
+                $this->failAll();
+                $this->transcoder->executeErrorCallback($exception->getMessage());
+                $this->video->update(['failed_at' => Carbon::now()]);
+                $this->job->release();
+            }
 
     }
 
@@ -40,6 +53,19 @@ class CreateThumbnailJob implements ShouldQueue
     {
 
     }
+
+    private function failAll()
+    {
+        Log::debug("Entering " . __METHOD__);
+        Log::info('One or more steps of CreateThumbnailJob with download_id ' . $this->video->download_id . ' failed, cancelling all related jobs');
+        DownloadFileJob::killAssociatedJobs($this->video->download_id);
+        VideoController::deleteAllByMediaKey($this->video->mediakey);
+        $downloadJob = DownloadJob::where('download_id', $this->video->download_id)->where('job_id', $this->job->getJobId());
+        $downloadJob->delete();
+        $this->delete();
+        Log::debug("Exiting " . __METHOD__);
+    }
+
 
     public function jobs()
     {
