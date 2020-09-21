@@ -106,3 +106,8 @@ ExecStart=/usr/bin/php /opt/transcoding-webservice/artisan queue:work --daemon -
 [Install]
 WantedBy=multi-user.target
 ```
+#### Configure cron job for task scheduling
+Create file /etc/cron.d/transcoding-webservice with following content, adjust path according your needs
+```
+* * * * * root cd /opt/transcoding-webservice && php artisan schedule:run >> /dev/null 2>&1
+```
