@@ -44,7 +44,7 @@ class TranscodingController extends Controller
 
     public function transcode()
     {
-	Log::debug("Entering " . __METHOD__);
+        Log::debug("Entering " . __METHOD__);
         $pid = $this->pid = getmypid();
 
         $this->video->update([
@@ -60,9 +60,10 @@ class TranscodingController extends Controller
 
         $converted_name = $this->getTargetFile();
 
-        if ($this->attempts > 1) {
+        $fallback_profile = Profile::find($this->user->profile->fallback_id);
+        if ($this->attempts > 1  && !empty($fallback_profile)) {
             Log::info("Failed to encode $converted_name with " . $this->profile->encoder . " codec");
-            $this->profile = Profile::find($this->user->profile->fallback_id);
+            $this->profile = $fallback_profile;
         }
         Log::info("Trying to encode clip $converted_name with " . $this->profile->encoder . " codec ..");
         Log::debug("Target:  ". print_r($this->video->target, true));
@@ -73,7 +74,13 @@ class TranscodingController extends Controller
             ->setAdditionalParameters($this->applyAdditionalParameters())
             ->setInitialParameters($this->applyInitialParameters());
 
-        $ffmpeg = FFMpeg\FFMpeg::create($this->getFFmpegConfig());
+        $ffmpeg = FFMpeg\FFMpeg::create(self::getFFmpegConfig());
+        if(self::getFFmpegConfig()['ffmpeg.debug']) {
+            $ffmpeg->getFFMpegDriver()->listen(new \Alchemy\BinaryDriver\Listeners\DebugListener());
+                $ffmpeg->getFFMpegDriver()->on('debug', function ($message) {
+                    Log::info('FFmpeg: ' . $message);
+                });   
+        }
 
         $video = $ffmpeg->open(Storage::disk('uploaded')->path($this->video->path));
 
@@ -98,7 +105,7 @@ class TranscodingController extends Controller
 
     public function createThumbnail()
     {
-	Log::debug("Entering " . __METHOD__);
+        Log::debug("Entering " . __METHOD__);
         $payload = $this->video->target;
         $target = $payload['thumbnail_item'];
         $user = User::find($this->video->user_id);
@@ -106,8 +113,14 @@ class TranscodingController extends Controller
         $key = array_key_first($target);
         $converted_name = $this->video->path . '_' . $payload['source']['created_at'] . '_' . $key . '.jpg';
 
-        $ffmpeg = FFMpeg\FFMpeg::create($this->getFFmpegConfig());
-
+        $ffmpeg = FFMpeg\FFMpeg::create(self::getFFmpegConfig());
+        if(self::getFFmpegConfig()['ffmpeg.debug']) {
+            $ffmpeg->getFFMpegDriver()->listen(new \Alchemy\BinaryDriver\Listeners\DebugListener());
+            $ffmpeg->getFFMpegDriver()->on('debug', function ($message) {
+                Log::info('FFmpeg: ' . $message);
+            });
+        }
+        
         $ffmpeg->open(Storage::disk('uploaded')->path($this->video->path))
             ->frame(FFMpeg\Coordinate\TimeCode::fromSeconds($target[$key]['second']))
             ->save(Storage::disk('converted')->path($converted_name));
@@ -132,7 +145,13 @@ class TranscodingController extends Controller
                 ]
             ]
         ]);
-	Log::debug("Exiting " . __METHOD__);
+
+        if ($this->downloadComplete() && $this->video->download()->get('processed'))
+        {
+            $this->video->download()->update(['processed' => Download::PROCESSED]);
+            $this->executeFinalCallback();
+        }
+        Log::debug("Exiting " . __METHOD__);
     }
 
     public function createSpritemap()
@@ -148,9 +167,22 @@ class TranscodingController extends Controller
         $target_width = isset($spritemap['width']) ? $spritemap['width'] : 142;
         $target_height = isset($spritemap['height']) ? $spritemap['height'] : 80;
 
-        $ffmpeg = FFMpeg\FFMpeg::create($this->getFFmpegConfig());
-        $ffprobe = FFMpeg\FFProbe::create($this->getFFmpegConfig());
+        $ffmpeg = FFMpeg\FFMpeg::create(self::getFFmpegConfig());
+        if(self::getFFmpegConfig()['ffmpeg.debug']) {
+            $ffmpeg->getFFMpegDriver()->listen(new \Alchemy\BinaryDriver\Listeners\DebugListener());
+            $ffmpeg->getFFMpegDriver()->on('debug', function ($message) {
+                Log::info('FFmpeg: ' . $message);
+            });
+        }
 
+        $ffprobe = FFMpeg\FFProbe::create(self::getFFmpegConfig());
+        if(self::getFFmpegConfig()['ffprobe.debug']) {
+            $ffprobe->getFFProbeDriver()->listen(new \Alchemy\BinaryDriver\Listeners\DebugListener());
+            $ffprobe->getFFProbeDriver()->on('debug', function ($message) {
+                Log::info('FFprobe: ' . $message);
+            });
+        }
+        
         $source_format = $ffprobe
             ->streams(Storage::disk('uploaded')->path($this->video->path))
             ->videos()
@@ -184,6 +216,12 @@ class TranscodingController extends Controller
                 ]
             ]
         ]);
+
+        if ($this->downloadComplete() && $this->video->download()->get('processed'))
+        {
+            $this->video->download()->update(['processed' => Download::PROCESSED]);
+            $this->executeFinalCallback();
+        }
 	    Log::debug("Exiting " . __METHOD__);
     }
 
@@ -207,19 +245,21 @@ class TranscodingController extends Controller
         return $this->hls;
     }
 
-    public function getFFmpegConfig()
+    public static function getFFmpegConfig()
     {
         return array(
             'ffmpeg.binaries' => config('php-ffmpeg.ffmpeg.binaries'),
             'ffmpeg.threads' => config('php-ffmpeg.ffmpeg.threads'),
             'ffprobe.binaries' => config('php-ffmpeg.ffprobe.binaries'),
+            'ffmpeg.debug' => config('php-ffmpeg.ffmpeg.debug'),
+            'ffprobe.debug' => config('php-ffmpeg.ffprobe.debug'),
             'timeout' => config('php-ffmpeg.timeout'),
         );
     }
 
     public function executeCallback()
     {
-	Log::debug("Entering " . __METHOD__);
+        Log::debug("Entering " . __METHOD__);
         $guzzle = new Client();
         $api_token = $this->user->api_token;
         $url = $this->user->url . '/transcoderwebservice/callback';
@@ -270,7 +310,13 @@ class TranscodingController extends Controller
         }
         else {
             $ffprobe = FFMpeg\FFProbe::create();
-
+            if(self::getFFmpegConfig()['ffprobe.debug']) {
+                $ffprobe->getFFProbeDriver()->listen(new \Alchemy\BinaryDriver\Listeners\DebugListener());
+                $ffprobe->getFFProbeDriver()->on('debug', function ($message) {
+                    Log::info('FFprobe: ' . $message);
+                });
+            }
+            
             $source_format = $ffprobe
                 ->streams(Storage::disk('uploaded')->path($this->video->path))
                 ->videos()
@@ -309,7 +355,7 @@ class TranscodingController extends Controller
             $this->video->download()->update(['processed' => Download::PROCESSED]);
             $this->executeFinalCallback();
         }
-	Log::debug("Exiting " . __METHOD__);
+        Log::debug("Exiting " . __METHOD__);
     }
 
     public function executeFinalCallback()
@@ -474,7 +520,7 @@ class TranscodingController extends Controller
 
             default:
             {
-                $scale_default = 'scale=w='.$w.':h='.$h.':force_original_aspect_ratio=decrease';
+                $scale_default = 'scale=w='.$w.':h='.$h.':force_original_aspect_ratio=decrease,crop=\'iw-mod(iw\,2)\':\'ih-mod(ih\,2)\'';
                 $video->filters()->custom($scale_default)->synchronize();
                 return $video;
             }
@@ -486,6 +532,17 @@ class TranscodingController extends Controller
         if($this->getHLS())
         {
             Storage::disk('converted')->deleteDirectory($this->video->path);
+        }
+    }
+    
+    public static function getFFmpegVersion()
+    {
+        try{
+            $ffmpeg = FFMpeg\FFMpeg::create(self::getFFmpegConfig());
+            return $ffmpeg->getFFMpegDriver()->getVersion();
+        }
+        catch (Exception $exception) {
+            return $exception->getMessage();
         }
     }
 }

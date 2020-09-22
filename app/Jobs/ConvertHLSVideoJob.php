@@ -37,12 +37,15 @@ class ConvertHLSVideoJob implements ShouldQueue
 
     public function handle()
     {
+        Log::debug("Entering " . __METHOD__);
         $existingFailedJobs = Video::where('download_id', '=', $this->video->download_id)->whereNotNull('failed_at')->count() > 0;
 
-        if (!$this->video->getAttribute('converted_at') && !$existingFailedJobs) {
+        if(!$this->video->getAttribute('converted_at') && !$existingFailedJobs)
+        {
             try
             {
-                if($this->video->processed !== Video::PROCESSING) {
+                if($this->video->processed !== Video::PROCESSING)
+                {
                     DownloadJob::create([
                         'download_id' => $this->video->download_id,
                         'job_id' => $this->job->getJobId()
@@ -56,17 +59,19 @@ class ConvertHLSVideoJob implements ShouldQueue
             }
             catch (\Exception $exception)
             {
-                echo "HLSVideoJob Message: " . $exception->getMessage() . ", Code: " . $exception->getCode() . ", Attempt: " . $this->attempts();
+                Log::info("ConvertHLSVideoJob Message: " . $exception->getMessage() . ", Code: " . $exception->getCode() . ", Attempt: " . $this->attempts() . ", Class: " . get_class($exception));
+                $this->video->update(['processed' => Video::FAILED]);
 
                 if(is_a($exception, '\GuzzleHttp\Exception\ClientException'))
                 {
-			Log::info('HTTP Client exception for download_id ' . $this->video->download_id);
+                    Log::info('HTTP Client exception for download_id ' . $this->video->download_id);
                     $this->failAll();
                 }
 
                 if($this->attempts() > 1)
                 {
-		Log::info('Maximal attempts for download_id ' . $this->video->download_id);
+                    Log::info('Maximal attempts for download_id ' . $this->video->download_id);
+                    Log::info('Exception ' . $exception->getTraceAsString());
                     $this->failAll();
                     $this->transcoder->executeErrorCallback($exception->getMessage());
                 }
@@ -80,11 +85,12 @@ class ConvertHLSVideoJob implements ShouldQueue
         } else {
             $this->failAll();
         }
+        Log::debug("Exiting " . __METHOD__);
     }
 
     public function failed($exception)
     {
-
+        Log::debug("Entering " . __METHOD__);
     }
 
     public function jobs()
@@ -94,11 +100,13 @@ class ConvertHLSVideoJob implements ShouldQueue
 
     private function failAll()
     {
-        Log::info('One or more steps in jobs with download_id ' . $this->video->download_id . ' failed, cancelling');
+        Log::debug("Entering " . __METHOD__);
+        Log::info('One or more steps of ConvertHLSVideoJob with download_id ' . $this->video->download_id . ' failed, cancelling all related jobs');
         DownloadFileJob::killAssociatedJobs($this->video->download_id);
         VideoController::deleteAllByMediaKey($this->video->mediakey);
         $downloadJob = DownloadJob::where('download_id', $this->video->download_id)->where('job_id', $this->job->getJobId());
         $downloadJob->delete();
         $this->delete();
+        Log::debug("Exiting " . __METHOD__);
     }
 }

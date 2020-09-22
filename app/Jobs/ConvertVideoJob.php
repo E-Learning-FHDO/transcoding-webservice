@@ -36,7 +36,7 @@ class ConvertVideoJob implements ShouldQueue
 
     public function handle()
     {
-	Log::debug("Entering " . __METHOD__);
+        Log::debug("Entering " . __METHOD__);
         $existingFailedJobs = Video::where('download_id', '=', $this->video->download_id)->whereNotNull('failed_at')->count() > 0;
 
         if(!$this->video->getAttribute('converted_at') && !$existingFailedJobs)
@@ -68,7 +68,7 @@ class ConvertVideoJob implements ShouldQueue
 
                 if($this->attempts() > 1)
                 {
-	            Log::info('Maximal attempts for download_id ' . $this->video->download_id);
+	                Log::info('Maximal attempts for download_id ' . $this->video->download_id);
                     Log::info('Exception ' . $exception->getTraceAsString());
                     $this->failAll();
                     $this->transcoder->executeErrorCallback($exception->getMessage());

@@ -19,16 +19,20 @@ class HomeController extends Controller
             ->row(function (Row $row) {
 
                 $row->column(4, function (Column $column) {
-                    $column->append(Dashboard::environment());
+                    $column->append(TranscodingDashboard::environment());
                 });
 
                 $row->column(4, function (Column $column) {
-                    $column->append(Dashboard::extensions());
+                    $column->append(TranscodingDashboard::extensions());
                 });
 
                 $row->column(4, function (Column $column) {
-                    $column->append(Dashboard::dependencies());
+                    $column->append(TranscodingDashboard::dependencies());
                 });
+                
+                /* $row->column(4, function (Column $column) {
+                    $column->append(TranscodingDashboard::workers());
+                });*/
             });
     }
 }

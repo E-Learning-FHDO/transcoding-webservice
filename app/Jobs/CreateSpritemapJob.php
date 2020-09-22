@@ -23,6 +23,8 @@ class CreateSpritemapJob implements ShouldQueue
 
     private $dimension;
 
+    private $transcoder;
+
     public function __construct(Video $video)
     {
         $this->video = $video;
@@ -31,10 +33,25 @@ class CreateSpritemapJob implements ShouldQueue
 
     public function handle()
     {
-        $transcoder = new TranscodingController($this->video, $this->dimension, $this->attempts());
-        $transcoder->createSpritemap();
+        Log::debug("Entering " . __METHOD__);
+        $this->transcoder = new TranscodingController($this->video, $this->dimension, $this->attempts());
+        try
+        {
+            $this->transcoder->createSpritemap();
+        }
 
+        catch (\Exception $exception)
+        {
+            Log::info("CreateThumbnailJob Message: " . $exception->getMessage() . ", Code: " . $exception->getCode() . ", Attempt: " . $this->attempts());
+            $this->video->update(['processed' => Video::FAILED]);
 
+            Log::info('Exception ' . $exception->getTraceAsString());
+            $this->failAll();
+            $this->transcoder->executeErrorCallback($exception->getMessage());
+            $this->video->update(['failed_at' => Carbon::now()]);
+            $this->job->release();
+        }
+        Log::debug("Exiting " . __METHOD__);
     }
 
     public function failed(\Exception $exception)

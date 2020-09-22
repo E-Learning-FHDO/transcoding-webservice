@@ -1,7 +1,7 @@
 Transcode video with FFmpeg in Laravel using queues. 
 
 The webservice is based on the PHP framework Laravel and currently uses the database SQLite, but can also be used with other databases. 
-At least PHP version 7.3 is required. Furthermore the following packages and PHP extensions are required: php-fpm, php-sqlite3 php-xml php-zip php-curl as well as nginx, nodejs, composer and ffmpeg.
+At least PHP version 7.3 is required. Furthermore, the following packages and PHP extensions are required: php-fpm, php-sqlite3 php-xml php-zip php-curl as well as nginx, nodejs, composer and ffmpeg.
 
 
 ### Setup Instructions
@@ -16,16 +16,20 @@ Set queue connection to database or beanstalkd:
 ```
 QUEUE_CONNECTION=database
 ```
-Set paths to ffmpeg and ffprobe binaries, if they are not located in standard path:
+Set paths to ffmpeg and ffprobe binaries, if they are not located in a standard path:
 ```
 FFMPEG_BINARIES=''
 FFPROBE_BINARIES=''
 ```
-Set database connection settings, here for sqlite. Usage of other database backends such as mysql is also possible, 
-please refer to laravel documentation for setup instructions.
+Set database connection settings. MySQL or MariaDB is necessary for concurrent worker connections.
+Other database backends might also work, but haven't been tested extensively.
 ```
-DB_CONNECTION=sqlite
-DB_FILENAME=database/database.sqlite
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=transcoding_webservice
+DB_USERNAME=root
+DB_PASSWORD=
 ```
 Save and close the .env file
 
@@ -41,14 +45,13 @@ $ php artisan key:generate
 
 Run database migrations
 ```
-$ touch database/database.sqlite
 $ php artisan migrate
 $ php artisan db:seed
 ```
 #### Configure webservice as NGINX site
 Use following site configuration for the webservice, 
 adjust server name and root path.
-NGINX should be started with www-data user
+NGINX should be started with www-data user.
 ```
 server {
     listen 80;
@@ -107,7 +110,13 @@ ExecStart=/usr/bin/php /opt/transcoding-webservice/artisan queue:work --daemon -
 WantedBy=multi-user.target
 ```
 #### Configure cron job for task scheduling
-Create file /etc/cron.d/transcoding-webservice with following content, adjust path according your needs
+Create file /etc/cron.d/transcoding-webservice with following content, adjust the path according your needs
 ```
 * * * * * root cd /opt/transcoding-webservice && php artisan schedule:run >> /dev/null 2>&1
+```
+#### Troubleshooting
+Enable full FFmpeg and FFprobe output in storage/log/laravel.log for debugging purposes: 
+```
+FFMPEG_DEBUG=true
+FFPROBE_DEBUG=true
 ```

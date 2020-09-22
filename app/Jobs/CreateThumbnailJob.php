@@ -23,6 +23,8 @@ class CreateThumbnailJob implements ShouldQueue
 
     private $dimension;
 
+    private $transcoder;
+
     public function __construct(Video $video)
     {
         $this->video = $video;
@@ -31,27 +33,30 @@ class CreateThumbnailJob implements ShouldQueue
 
     public function handle()
     {
-        $transcoder = new TranscodingController($this->video, $this->dimension, $this->attempts());
-	try {
-        	$transcoder->createThumbnail();
-            }
-            catch (\Exception $exception)
-            {
-                Log::info("CreateThumbnailJob Message: " . $exception->getMessage() . ", Code: " . $exception->getCode() . ", Attempt: " . $this->attempts());
-                $this->video->update(['processed' => Video::FAILED]);
+        Log::debug("Entering " . __METHOD__);
+        $this->transcoder = new TranscodingController($this->video, $this->dimension, $this->attempts());
+	    try
+        {
+        	$this->transcoder->createThumbnail();
+        }
 
-                Log::info('Exception ' . $exception->getTraceAsString());
-                $this->failAll();
-                $this->transcoder->executeErrorCallback($exception->getMessage());
-                $this->video->update(['failed_at' => Carbon::now()]);
-                $this->job->release();
-            }
+        catch (\Exception $exception)
+        {
+            Log::info("CreateThumbnailJob Message: " . $exception->getMessage() . ", Code: " . $exception->getCode() . ", Attempt: " . $this->attempts());
+            $this->video->update(['processed' => Video::FAILED]);
 
+            Log::info('Exception ' . $exception->getTraceAsString());
+            $this->failAll();
+            $this->transcoder->executeErrorCallback($exception->getMessage());
+            $this->video->update(['failed_at' => Carbon::now()]);
+            $this->job->release();
+        }
+        Log::debug("Exiting " . __METHOD__);
     }
 
     public function failed(\Exception $exception)
     {
-
+        Log::debug("Entering " . __METHOD__);
     }
 
     private function failAll()
