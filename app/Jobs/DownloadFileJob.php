@@ -55,6 +55,7 @@ class DownloadFileJob implements ShouldQueue
                         'api_token' => $api_token,
                     ]
                 ]);
+                Log::debug(__METHOD__ .': '. $response->getReasonPhrase());
                 Storage::disk('uploaded')->put($path, $response->getBody());
             } catch (\Exception $exception) {
                 Log::info('Exception occurred while downloading: ' . $exception->getMessage());

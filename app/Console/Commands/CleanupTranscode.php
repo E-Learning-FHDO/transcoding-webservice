@@ -68,6 +68,7 @@ class CleanupTranscode extends Command
                     'finished' => true
                 ]
             ]);
+            Log::debug(__METHOD__ .': '. $response->getReasonPhrase());
         }
         Log::debug("Exiting " . __METHOD__);
     }

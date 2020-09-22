@@ -40,6 +40,8 @@ class TranscodingController extends Controller
         $this->video = $video;
         $this->dimension = $dimension;
         $this->attempts = $attempts;
+        $this->user = User::find($this->video->user_id);
+        $this->profile = $this->user->profile;
     }
 
     public function transcode()
@@ -54,9 +56,6 @@ class TranscodingController extends Controller
         $this->prepare();
 
         $target = $this->video->target;
-
-        $this->user = User::find($this->video->user_id);
-        $this->profile = $this->user->profile;
 
         $converted_name = $this->getTargetFile();
 
@@ -108,7 +107,6 @@ class TranscodingController extends Controller
         Log::debug("Entering " . __METHOD__);
         $payload = $this->video->target;
         $target = $payload['thumbnail_item'];
-        $user = User::find($this->video->user_id);
 
         $key = array_key_first($target);
         $converted_name = $this->video->path . '_' . $payload['source']['created_at'] . '_' . $key . '.jpg';
@@ -133,8 +131,8 @@ class TranscodingController extends Controller
 
         $guzzle = new Client();
 
-        $api_token = $user->api_token;
-        $url = $user->url . '/transcoderwebservice/callback';
+        $api_token = $this->user->api_token;
+        $url = $this->user->url . '/transcoderwebservice/callback';
 
         $response = $guzzle->post($url, [
             RequestOptions::JSON => [
@@ -146,6 +144,8 @@ class TranscodingController extends Controller
             ]
         ]);
 
+        Log::debug(__METHOD__ .': '. $response->getReasonPhrase());
+        
         if ($this->downloadComplete() && $this->video->download()->get('processed'))
         {
             $this->video->download()->update(['processed' => Download::PROCESSED]);
@@ -159,8 +159,6 @@ class TranscodingController extends Controller
 	    Log::debug("Entering " . __METHOD__);
         $payload = $this->video->target;
         $spritemap = $payload['spritemap'];
-
-        $user = User::find($this->video->user_id);
 
         $converted_name = $this->video->path . '_' . $payload['source']['created_at'] . '_sprites.jpg';
 
@@ -203,8 +201,8 @@ class TranscodingController extends Controller
 
         $guzzle = new Client();
 
-        $api_token = $user->api_token;
-        $url = $user->url . '/transcoderwebservice/callback';
+        $api_token = $this->user->api_token;
+        $url = $this->user->url . '/transcoderwebservice/callback';
 
         $response = $guzzle->post($url, [
             RequestOptions::JSON => [
@@ -217,6 +215,8 @@ class TranscodingController extends Controller
             ]
         ]);
 
+        Log::debug(__METHOD__ .': '. $response->getReasonPhrase());
+        
         if ($this->downloadComplete() && $this->video->download()->get('processed'))
         {
             $this->video->download()->update(['processed' => Download::PROCESSED]);
@@ -266,8 +266,8 @@ class TranscodingController extends Controller
 
         if ($this->getHLS())
         {
-            $files = Storage::disk('converted')->files($this->video->path);
-            $archiveFile = $this->video->path . '_' . $this->video->target['label'] . '_' . $this->video->target['extension'] . '.zip';
+            $files = Storage::disk('converted')->files($this->getHLSDirectory());
+            $archiveFile = $this->getHLSDirectory() . '.zip';
             Log::info('Archive: ' . $archiveFile);
             $archive = new ZipArchive();
 
@@ -350,6 +350,7 @@ class TranscodingController extends Controller
 
         $response = $guzzle->post($url, $requestOptions);
 
+        Log::debug(__METHOD__ .': '. $response->getReasonPhrase());
         if ($this->downloadComplete() && $this->video->download()->get('processed'))
         {
             $this->video->download()->update(['processed' => Download::PROCESSED]);
@@ -374,6 +375,7 @@ class TranscodingController extends Controller
                 'finished' => true
             ]
         ]);
+        Log::debug(__METHOD__ .': '. $response->getReasonPhrase());
 	    Log::debug("Exiting " . __METHOD__);
     }
 
@@ -393,6 +395,7 @@ class TranscodingController extends Controller
                 'error' => [ 'message' => $message ]
             ]
         ]);
+        Log::debug(__METHOD__ .': '. $response->getReasonPhrase());
 	    Log::debug("Exiting " . __METHOD__);
     }
 
@@ -487,8 +490,8 @@ class TranscodingController extends Controller
 
         if($this->getHLS())
         {
-            Storage::disk('converted')->makeDirectory($this->video->path);
-            $file = $this->video->path . DIRECTORY_SEPARATOR . $this->video->path . '_' . $target['created_at'] . $separator . $target['label'] . '_' . $target['extension'] . '.m3u8';;
+            Storage::disk('converted')->makeDirectory($this->getHLSDirectory());
+            $file = $this->getHLSDirectory() . DIRECTORY_SEPARATOR . $this->video->path . '_' . $target['created_at'] . $separator . $target['label'] . '_' . $target['extension'] . '.m3u8';;
         }
 
         if ($this->getPreview())
@@ -531,8 +534,13 @@ class TranscodingController extends Controller
     {
         if($this->getHLS())
         {
-            Storage::disk('converted')->deleteDirectory($this->video->path);
+            Storage::disk('converted')->deleteDirectory($this->getHLSDirectory());
         }
+    }
+    
+    private function getHLSDirectory()
+    {
+        return $this->video->path . '_' . $this->video->target['label'] . '_' . $this->video->target['extension'];    
     }
     
     public static function getFFmpegVersion()
