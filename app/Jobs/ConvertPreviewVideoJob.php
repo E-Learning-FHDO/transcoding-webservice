@@ -15,7 +15,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use App\Http\Controllers\TranscodingController;
 use Illuminate\Support\Facades\Log;
-use mysql_xdevapi\Exception;
+use Throwable;
 
 class ConvertPreviewVideoJob implements ShouldQueue
 {
@@ -38,6 +38,7 @@ class ConvertPreviewVideoJob implements ShouldQueue
 
     public function handle()
     {
+        Log::debug("Entering " . __METHOD__);
         $existingFailedJobs = Video::where('download_id', '=', $this->video->download_id)->whereNotNull('failed_at')->count() > 0;
 
         if (!$this->video->getAttribute('converted_at') && !$existingFailedJobs) {
@@ -55,18 +56,18 @@ class ConvertPreviewVideoJob implements ShouldQueue
                     $this->transcoder->executeCallback();
                 }
             }
-            catch (\Exception $exception)
+            catch (Throwable $exception)
             {
-                Log::info("PreviewVideoJob Message: " . $exception->getMessage() . ", Code: " . $exception->getCode() . ", Attempt: " . $this->attempts());
+                Log::info("PreviewVideoJob Message: " . $exception->getMessage() . ", Code: " . $exception->getCode() . ", Attempt: " . $this->attempts() . ", Class: " . get_class($exception) . ", Trace: " . $exception->getTraceAsString());
                 if(is_a($exception, '\GuzzleHttp\Exception\ClientException'))
                 {
-			Log::info('HTTP Client exception for download_id ' . $this->video->download_id);
+                    Log::info('HTTP Client exception for download_id ' . $this->video->download_id);
                     $this->failAll();
                 }
 
                 if($this->attempts() > 1)
                 {
-			Log::info('Maximal attempts for download_id ' . $this->video->download_id);
+                    Log::info('Maximal attempts for download_id ' . $this->video->download_id);
                     $this->failAll();
                     $this->transcoder->executeErrorCallback($exception->getMessage());
                 }
@@ -80,9 +81,10 @@ class ConvertPreviewVideoJob implements ShouldQueue
         } else {
             $this->failAll();
         }
+        Log::debug("Exiting " . __METHOD__);
     }
 
-    public function failed($exception)
+    public function failed(Throwable $exception)
     {
 
     }
@@ -94,11 +96,13 @@ class ConvertPreviewVideoJob implements ShouldQueue
 
     private function failAll()
     {
+        Log::debug("Entering " . __METHOD__);
         Log::info('One or more steps in jobs with download_id ' . $this->video->download_id . ' failed, cancelling');
         DownloadFileJob::killAssociatedJobs($this->video->download_id);
         VideoController::deleteAllByMediaKey($this->video->mediakey);
         $downloadJob = DownloadJob::where('download_id', $this->video->download_id)->where('job_id', $this->job->getJobId());
         $downloadJob->delete();
         $this->delete();
+        Log::debug("Exiting " . __METHOD__);
     }
 }

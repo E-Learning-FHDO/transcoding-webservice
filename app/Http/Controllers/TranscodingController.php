@@ -425,7 +425,7 @@ class TranscodingController extends Controller
     protected function check360Video($source_format)
     {
         $is360Video = false;
-        $side_data_list = $source_format->get('side_data_list')[0];
+        $side_data_list = isset($source_format->get('side_data_list')[0]) ? $source_format->get('side_data_list')[0] : null;
         if (isset($side_data_list["side_data_type"])) {
             $side_data_type = Arr::get($side_data_list, 'side_data_type');
             $is360Video = Str::contains($side_data_type, 'Spherical Mapping');

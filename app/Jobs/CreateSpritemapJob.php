@@ -14,6 +14,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class CreateSpritemapJob implements ShouldQueue
 {
@@ -40,9 +41,9 @@ class CreateSpritemapJob implements ShouldQueue
             $this->transcoder->createSpritemap();
         }
 
-        catch (\Exception $exception)
+        catch (Throwable $exception)
         {
-            Log::info("CreateThumbnailJob Message: " . $exception->getMessage() . ", Code: " . $exception->getCode() . ", Attempt: " . $this->attempts());
+            Log::info("CreateSpritemapJob Message: " . $exception->getMessage() . ", Code: " . $exception->getCode() . ", Attempt: " . $this->attempts() . ", Class: " . get_class($exception) . ", Trace: " . $exception->getTraceAsString());
             $this->video->update(['processed' => Video::FAILED]);
 
             Log::info('Exception ' . $exception->getTraceAsString());
@@ -54,7 +55,7 @@ class CreateSpritemapJob implements ShouldQueue
         Log::debug("Exiting " . __METHOD__);
     }
 
-    public function failed(\Exception $exception)
+    public function failed(Throwable $exception)
     {
 
     }

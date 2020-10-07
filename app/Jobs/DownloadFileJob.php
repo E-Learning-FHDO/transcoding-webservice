@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use GuzzleHttp\Client;
+use Throwable;
 
 class DownloadFileJob implements ShouldQueue
 {
@@ -57,7 +58,7 @@ class DownloadFileJob implements ShouldQueue
                 ]);
                 Log::debug(__METHOD__ .': '. $response->getReasonPhrase());
                 Storage::disk('uploaded')->put($path, $response->getBody());
-            } catch (\Exception $exception) {
+            } catch (Throwable $exception) {
                 Log::info('Exception occurred while downloading: ' . $exception->getMessage());
             }
         } else {
@@ -152,11 +153,11 @@ class DownloadFileJob implements ShouldQueue
         Log::debug("Exiting " . __METHOD__);
     }
 
-    public function failed(\Exception $exception)
+    public function failed(Throwable $exception)
     {
         Log::debug("Entering " . __METHOD__);
         $this->delete();
-        echo $exception->getMessage();
+        Log::debug($exception->getMessage());
         Log::debug("Exiting " . __METHOD__);
     }
 

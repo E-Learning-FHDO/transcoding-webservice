@@ -15,6 +15,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class ConvertHLSVideoJob implements ShouldQueue
 {
@@ -57,9 +58,9 @@ class ConvertHLSVideoJob implements ShouldQueue
                     $this->transcoder->executeCallback();
                 }
             }
-            catch (\Exception $exception)
+            catch (Throwable $exception)
             {
-                Log::info("ConvertHLSVideoJob Message: " . $exception->getMessage() . ", Code: " . $exception->getCode() . ", Attempt: " . $this->attempts() . ", Class: " . get_class($exception));
+                Log::info("ConvertHLSVideoJob Message: " . $exception->getMessage() . ", Code: " . $exception->getCode() . ", Attempt: " . $this->attempts() . ", Class: " . get_class($exception) . ", Trace: " . $exception->getTraceAsString());
                 $this->video->update(['processed' => Video::FAILED]);
 
                 if(is_a($exception, '\GuzzleHttp\Exception\ClientException'))
@@ -88,7 +89,7 @@ class ConvertHLSVideoJob implements ShouldQueue
         Log::debug("Exiting " . __METHOD__);
     }
 
-    public function failed($exception)
+    public function failed(Throwable $exception)
     {
         Log::debug("Entering " . __METHOD__);
     }
