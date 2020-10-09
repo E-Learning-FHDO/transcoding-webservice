@@ -78,27 +78,34 @@ class TranscodingController extends Controller
             $ffmpeg->getFFMpegDriver()->listen(new \Alchemy\BinaryDriver\Listeners\DebugListener());
                 $ffmpeg->getFFMpegDriver()->on('debug', function ($message) {
                     Log::info('FFmpeg: ' . $message);
-                });   
+                });
         }
 
-        $video = $ffmpeg->open(Storage::disk('uploaded')->path($this->video->path));
+        $videofile = Storage::disk('uploaded')->path($this->video->path);
+        if (file_exists($videofile) && is_readable($videofile) && is_writable($videofile)) {
+            $video = $ffmpeg->open(Storage::disk('uploaded')->path($this->video->path));
 
-        $video = $this->applyFilters($video);
+            $video = $this->applyFilters($video);
 
-        $h264->on('progress', function ($video, $format, $percentage) use ($pid, $converted_name) {
-            if (($percentage % 5) === 0) {
-                Log::info("PID: $pid, $percentage% of $converted_name transcoded");
-                $this->progress = $percentage;
-            }
-        });
+            $h264->on('progress', function ($video, $format, $percentage) use ($pid, $converted_name) {
+                if (($percentage % 5) === 0) {
+                    Log::info("PID: $pid, $percentage% of $converted_name transcoded");
+                    $this->progress = $percentage;
+                }
+            });
 
-        Log::debug('Executing ' . print_r($video->getFinalCommand($h264, Storage::disk('converted')->path($this->getTargetFile())), true));
-        $video->save($h264, Storage::disk('converted')->path($this->getTargetFile()));
-        $this->video->update([
-            'converted_at' => Carbon::now(),
-            'processed' => Video::PROCESSED,
-            'file' => $this->getTargetFile()
-        ]);
+            Log::debug('Executing ' . print_r($video->getFinalCommand($h264, Storage::disk('converted')->path($this->getTargetFile())), true));
+            $video->save($h264, Storage::disk('converted')->path($this->getTargetFile()));
+            $this->video->update([
+                'converted_at' => Carbon::now(),
+                'processed' => Video::PROCESSED,
+                'file' => $this->getTargetFile()
+            ]);
+        }
+        else {
+            Log::debug("File " . $videofile . ' is not readable, please check permissions of the storage folder');
+        }
+
 	    Log::debug("Exiting " . __METHOD__);
     }
 
@@ -115,41 +122,46 @@ class TranscodingController extends Controller
         if(self::getFFmpegConfig()['ffmpeg.debug']) {
             $ffmpeg->getFFMpegDriver()->listen(new \Alchemy\BinaryDriver\Listeners\DebugListener());
             $ffmpeg->getFFMpegDriver()->on('debug', function ($message) {
-                Log::info('FFmpeg: ' . $message);
+                Log::info(__METHOD__ . ' FFmpeg: ' . $message);
             });
         }
-        
-        $ffmpeg->open(Storage::disk('uploaded')->path($this->video->path))
-            ->frame(FFMpeg\Coordinate\TimeCode::fromSeconds($target[$key]['second']))
-            ->save(Storage::disk('converted')->path($converted_name));
 
-        $this->video->update([
-            'converted_at' => Carbon::now(),
-            'processed' => Video::PROCESSED,
-            'file' => $converted_name
-        ]);
+        $videofile = Storage::disk('uploaded')->path($this->video->path);
+        if (file_exists($videofile) && is_readable($videofile) && is_writable($videofile)) {
+            $ffmpeg->open($videofile)
+                ->frame(FFMpeg\Coordinate\TimeCode::fromSeconds($target[$key]['second']))
+                ->save(Storage::disk('converted')->path($converted_name));
 
-        $guzzle = new Client();
+            $this->video->update([
+                'converted_at' => Carbon::now(),
+                'processed' => Video::PROCESSED,
+                'file' => $converted_name
+            ]);
 
-        $api_token = $this->user->api_token;
-        $url = $this->user->url . '/transcoderwebservice/callback';
+            $guzzle = new Client();
 
-        $response = $guzzle->post($url, [
-            RequestOptions::JSON => [
-                'api_token' => $api_token,
-                'mediakey' => $this->video->mediakey,
-                'thumbnail' => [
-                    'url' => route('getFile', $converted_name)
+            $api_token = $this->user->api_token;
+            $url = $this->user->url . '/transcoderwebservice/callback';
+
+            $response = $guzzle->post($url, [
+                RequestOptions::JSON => [
+                    'api_token' => $api_token,
+                    'mediakey' => $this->video->mediakey,
+                    'thumbnail' => [
+                        'url' => route('getFile', $converted_name)
+                    ]
                 ]
-            ]
-        ]);
+            ]);
 
-        Log::debug(__METHOD__ .': '. $response->getReasonPhrase());
-        
-        if ($this->downloadComplete() && $this->video->download()->get('processed'))
-        {
-            $this->video->download()->update(['processed' => Download::PROCESSED]);
-            $this->executeFinalCallback();
+            Log::debug(__METHOD__ . ': ' . $response->getReasonPhrase());
+
+            if ($this->downloadComplete() && $this->video->download()->get('processed')) {
+                $this->video->download()->update(['processed' => Download::PROCESSED]);
+                $this->executeFinalCallback();
+            }
+        }
+        else {
+            Log::debug("File " . $videofile . ' is not readable, please check permissions of the storage folder');
         }
         Log::debug("Exiting " . __METHOD__);
     }
@@ -180,47 +192,52 @@ class TranscodingController extends Controller
                 Log::info('FFprobe: ' . $message);
             });
         }
-        
-        $source_format = $ffprobe
-            ->streams(Storage::disk('uploaded')->path($this->video->path))
-            ->videos()
-            ->first();
 
-        $video = $ffmpeg->open(Storage::disk('uploaded')->path($this->video->path));
-        $fps = $spritemap['count'] / ceil($source_format->get('duration'));
+        $videofile = Storage::disk('uploaded')->path($this->video->path);
+        if (file_exists($videofile) && is_readable($videofile) && is_writable($videofile)) {
+            $source_format = $ffprobe
+                ->streams($videofile)
+                ->videos()
+                ->first();
 
-        $video->frame(FFMpeg\Coordinate\TimeCode::fromSeconds(0))
-            ->addFilter(new CustomFrameFilter('scale=' . $target_width . ':' . $target_height . ',fps=' . $fps . ',tile=10x10:margin=2:padding=2'))
-            ->save(Storage::disk('converted')->path($converted_name));
+            $video = $ffmpeg->open(Storage::disk('uploaded')->path($this->video->path));
+            $fps = $spritemap['count'] / ceil($source_format->get('duration'));
 
-        $this->video->update([
-            'converted_at' => Carbon::now(),
-            'processed' => Video::PROCESSED,
-            'file' => $converted_name
-        ]);
+            $video->frame(FFMpeg\Coordinate\TimeCode::fromSeconds(0))
+                ->addFilter(new CustomFrameFilter('scale=' . $target_width . ':' . $target_height . ',fps=' . $fps . ',tile=10x10:margin=2:padding=2'))
+                ->save(Storage::disk('converted')->path($converted_name));
 
-        $guzzle = new Client();
+            $this->video->update([
+                'converted_at' => Carbon::now(),
+                'processed' => Video::PROCESSED,
+                'file' => $converted_name
+            ]);
 
-        $api_token = $this->user->api_token;
-        $url = $this->user->url . '/transcoderwebservice/callback';
+            $guzzle = new Client();
 
-        $response = $guzzle->post($url, [
-            RequestOptions::JSON => [
-                'api_token' => $api_token,
-                'mediakey' => $this->video->mediakey,
-                'spritemap' => [
-                    'count' => $spritemap['count'],
-                    'url' => route('getFile', $converted_name)
+            $api_token = $this->user->api_token;
+            $url = $this->user->url . '/transcoderwebservice/callback';
+
+            $response = $guzzle->post($url, [
+                RequestOptions::JSON => [
+                    'api_token' => $api_token,
+                    'mediakey' => $this->video->mediakey,
+                    'spritemap' => [
+                        'count' => $spritemap['count'],
+                        'url' => route('getFile', $converted_name)
+                    ]
                 ]
-            ]
-        ]);
+            ]);
 
-        Log::debug(__METHOD__ .': '. $response->getReasonPhrase());
-        
-        if ($this->downloadComplete() && $this->video->download()->get('processed'))
-        {
-            $this->video->download()->update(['processed' => Download::PROCESSED]);
-            $this->executeFinalCallback();
+            Log::debug(__METHOD__ . ': ' . $response->getReasonPhrase());
+
+            if ($this->downloadComplete() && $this->video->download()->get('processed')) {
+                $this->video->download()->update(['processed' => Download::PROCESSED]);
+                $this->executeFinalCallback();
+            }
+        }
+        else {
+            Log::debug("File " . $videofile . ' is not readable, please check permissions of the storage folder');
         }
 	    Log::debug("Exiting " . __METHOD__);
     }
@@ -316,7 +333,7 @@ class TranscodingController extends Controller
                     Log::info('FFprobe: ' . $message);
                 });
             }
-            
+
             $source_format = $ffprobe
                 ->streams(Storage::disk('uploaded')->path($this->video->path))
                 ->videos()
@@ -537,12 +554,12 @@ class TranscodingController extends Controller
             Storage::disk('converted')->deleteDirectory($this->getHLSDirectory());
         }
     }
-    
+
     private function getHLSDirectory()
     {
-        return $this->video->path . '_' . $this->video->target['label'] . '_' . $this->video->target['extension'];    
+        return $this->video->path . '_' . $this->video->target['label'] . '_' . $this->video->target['extension'];
     }
-    
+
     public static function getFFmpegVersion()
     {
         try{
