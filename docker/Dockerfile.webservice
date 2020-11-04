@@ -1,0 +1,15 @@
+FROM debian:buster
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget curl git unzip nginx composer php7.3-cli php7.3-mysql \
+    php7.3-xml php7.3-zip php7.3-curl php7.3-intl php7.3-mbstring \
+    php7.3-json php7.3-gd mariadb-client
+
+RUN wget --quiet -O - https://deb.nodesource.com/setup_12.x | bash - \
+    && apt-get update && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY webservice.sh /webservice.sh
+
+EXPOSE 8000
+CMD ["/webservice.sh"]

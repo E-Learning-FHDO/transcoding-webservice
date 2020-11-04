@@ -1,0 +1,8 @@
+FROM debian:buster
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    php7.3-cli php7.3-curl php7.3-zip php7.3-mysql php7.3-xml ffmpeg mariadb-client \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY worker.sh /worker.sh
+CMD ["/worker.sh"]

@@ -1,0 +1,49 @@
+version: "3.2"
+services:
+    webservice:
+        build:
+            context: .
+            dockerfile: Dockerfile.webservice
+        ports:
+            - "8000:8000"
+        volumes:
+            - type: bind
+              source: ../
+              target: /opt/transcoding-webservice
+        networks:
+            - default
+        environment:
+            - APP_URL=${APP_URL}
+    db:
+        image: mariadb
+        environment:
+            - MYSQL_ROOT_PASSWORD=root
+            - MYSQL_DATABASE=transcoding_webservice
+    worker-1:
+        build:
+            context: .
+            dockerfile: Dockerfile.worker
+        depends_on:
+            - "webservice"
+        volumes:
+            - type: bind
+              source: ../
+              target: /opt/transcoding-webservice
+        networks:
+            - default
+        restart: on-failure
+    worker-2:
+        build:
+            context: .
+            dockerfile: Dockerfile.worker
+        depends_on:
+            - "webservice"
+        volumes:
+            - type: bind
+              source: ../
+              target: /opt/transcoding-webservice
+        networks:
+            - default
+        restart: on-failure
+volumes:
+  persistent:
