@@ -88,6 +88,13 @@ class AdminPermissionsTableSeeder extends Seeder
                 'http_method' => '',
                 'http_path' => "/transcodingqueue*",
             ),
+            array(
+                'id' => 12,
+                'name' => 'Scheduling',
+                'slug' => 'ext.scheduling',
+                'http_method' => '',
+                'http_path' => "/scheduling*",
+            ),
         );
 
         DB::table('admin_permissions')->insert($admin_permissions);

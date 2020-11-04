@@ -15,6 +15,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Support\Facades\Log;
 use Throwable;
+use GuzzleHttp\Exception\ClientException;
 
 class ConvertVideoJob implements ShouldQueue
 {
@@ -60,36 +61,19 @@ class ConvertVideoJob implements ShouldQueue
             {
                 Log::info("ConvertVideoJob Message: " . $exception->getMessage() . ", Code: " . $exception->getCode() . ", Attempt: " . $this->attempts() . ", Class: " . get_class($exception) . ", Trace: " . $exception->getTraceAsString());
                 $this->video->update(['processed' => Video::FAILED]);
-
-                if(is_a($exception, '\GuzzleHttp\Exception\ClientException'))
-                {
-         	    Log::info('HTTP Client exception for download_id ' . $this->video->download_id);
-                    $this->failAll();
-                }
-
-                if($this->attempts() > 1)
-                {
-	                Log::info('Maximal attempts for download_id ' . $this->video->download_id);
-                    Log::info('Exception ' . $exception->getTraceAsString());
-                    $this->failAll();
-                    $this->transcoder->executeErrorCallback($exception->getMessage());
-                }
-
-                if(!$exception->getMessage() === 'Encoding failed')
-                {
-                    $this->video->update(['failed_at' => Carbon::now()]);
-                }
                 $this->job->release();
             }
-        } else {
-            $this->failAll();
         }
         Log::debug("Exiting " . __METHOD__);
     }
 
     public function failed(Throwable $exception)
     {
-	    Log::debug("Entering " . __METHOD__);
+        Log::debug("Entering " . __METHOD__);
+        $this->video->update(['processed' => Video::FAILED]);
+        $this->failAll();
+        TranscodingController::executeErrorCallback($this->video, $exception->getMessage());
+        Log::debug("Exiting " . __METHOD__);
     }
 
     public function jobs()
@@ -103,8 +87,8 @@ class ConvertVideoJob implements ShouldQueue
         Log::info('One or more steps of ConvertVideoJob with download_id ' . $this->video->download_id . ' failed, cancelling all related jobs');
         DownloadFileJob::killAssociatedJobs($this->video->download_id);
         VideoController::deleteAllByMediaKey($this->video->mediakey);
-        $downloadJob = DownloadJob::where('download_id', $this->video->download_id)->where('job_id', $this->job->getJobId());
-        $downloadJob->delete();
+        //$downloadJob = DownloadJob::where('download_id', $this->video->download_id)->where('job_id', $this->job->getJobId());
+        //$downloadJob->delete();
         $this->delete();
         Log::debug("Exiting " . __METHOD__);
     }

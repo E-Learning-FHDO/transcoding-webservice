@@ -59,34 +59,20 @@ class ConvertPreviewVideoJob implements ShouldQueue
             catch (Throwable $exception)
             {
                 Log::info("PreviewVideoJob Message: " . $exception->getMessage() . ", Code: " . $exception->getCode() . ", Attempt: " . $this->attempts() . ", Class: " . get_class($exception) . ", Trace: " . $exception->getTraceAsString());
-                if(is_a($exception, '\GuzzleHttp\Exception\ClientException'))
-                {
-                    Log::info('HTTP Client exception for download_id ' . $this->video->download_id);
-                    $this->failAll();
-                }
-
-                if($this->attempts() > 1)
-                {
-                    Log::info('Maximal attempts for download_id ' . $this->video->download_id);
-                    $this->failAll();
-                    $this->transcoder->executeErrorCallback($exception->getMessage());
-                }
-
-                if(!$exception->getMessage() === 'Encoding failed')
-                {
-                    $this->video->update(['failed_at' => Carbon::now()]);
-                }
+                $this->video->update(['processed' => Video::FAILED]);
                 $this->job->release();
             }
-        } else {
-            $this->failAll();
         }
         Log::debug("Exiting " . __METHOD__);
     }
 
     public function failed(Throwable $exception)
     {
-
+        Log::debug("Entering " . __METHOD__);
+        $this->video->update(['processed' => Video::FAILED]);
+        $this->failAll();
+        TranscodingController::executeErrorCallback($this->video, $exception->getMessage());
+        Log::debug("Exiting " . __METHOD__);
     }
 
     public function jobs()

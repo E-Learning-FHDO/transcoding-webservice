@@ -78,7 +78,10 @@ class VideoController extends Controller
                     $video->download->delete();
                 }
                 if(isset($video->target['label'], $video->target['extension'])) {
-                    Storage::disk('converted')->deleteDirectory($video->path . '_' . $video->target['label'] . '_' . $video->target['extension']);
+                    $dir = $video->path . '_' . $video->target['label'] . '_' . $video->target['extension'];
+                    if (Storage::disk('converted')->exists($dir)) {
+                        Storage::disk('converted')->deleteDirectory($dir);
+                    }
                 }
                 $video->delete();
             }

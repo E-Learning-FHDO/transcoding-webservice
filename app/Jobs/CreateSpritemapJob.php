@@ -45,11 +45,6 @@ class CreateSpritemapJob implements ShouldQueue
         {
             Log::info("CreateSpritemapJob Message: " . $exception->getMessage() . ", Code: " . $exception->getCode() . ", Attempt: " . $this->attempts() . ", Class: " . get_class($exception) . ", Trace: " . $exception->getTraceAsString());
             $this->video->update(['processed' => Video::FAILED]);
-
-            Log::info('Exception ' . $exception->getTraceAsString());
-            $this->failAll();
-            $this->transcoder->executeErrorCallback($exception->getMessage());
-            $this->video->update(['failed_at' => Carbon::now()]);
             $this->job->release();
         }
         Log::debug("Exiting " . __METHOD__);
@@ -57,7 +52,21 @@ class CreateSpritemapJob implements ShouldQueue
 
     public function failed(Throwable $exception)
     {
+        Log::debug("Entering " . __METHOD__);
+        $this->video->update(['processed' => Video::FAILED]);
+        $this->failAll();
+        TranscodingController::executeErrorCallback($this->video, $exception->getMessage());
+        Log::debug("Exiting " . __METHOD__);
+    }
 
+    private function failAll()
+    {
+        Log::debug("Entering " . __METHOD__);
+        Log::info('One or more steps of CreateSpritemapJob with download_id ' . $this->video->download_id . ' failed, cancelling all related jobs');
+        DownloadFileJob::killAssociatedJobs($this->video->download_id);
+        VideoController::deleteAllByMediaKey($this->video->mediakey);
+        $this->delete();
+        Log::debug("Exiting " . __METHOD__);
     }
 
     public function jobs()

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use Alchemy\BinaryDriver\Listeners\DebugListener;
 use App\Format\Video\H264;
 use App\Models\Download;
 use App\Models\Profile;
@@ -20,6 +21,7 @@ use Illuminate\Support\Str;
 use FFMpeg;
 use FFMpeg\Coordinate\Dimension;
 use ZipArchive;
+use Throwable;
 
 class TranscodingController extends Controller
 {
@@ -51,6 +53,7 @@ class TranscodingController extends Controller
 
         $this->video->update([
             'processed' => Video::PROCESSING,
+            'file' => $this->getTargetFile()
         ]);
 
         $this->prepare();
@@ -58,7 +61,7 @@ class TranscodingController extends Controller
         $target = $this->video->target;
 
         $converted_name = $this->getTargetFile();
-
+        Log::info("Clip: $converted_name, encoder: " . $this->profile->encoder . ", attempt: $this->attempts");
         $fallback_profile = Profile::find($this->user->profile->fallback_id);
         if ($this->attempts > 1  && !empty($fallback_profile)) {
             Log::info("Failed to encode $converted_name with " . $this->profile->encoder . " codec");
@@ -75,7 +78,7 @@ class TranscodingController extends Controller
 
         $ffmpeg = FFMpeg\FFMpeg::create(self::getFFmpegConfig());
         if(self::getFFmpegConfig()['ffmpeg.debug']) {
-            $ffmpeg->getFFMpegDriver()->listen(new \Alchemy\BinaryDriver\Listeners\DebugListener());
+            $ffmpeg->getFFMpegDriver()->listen(new DebugListener());
                 $ffmpeg->getFFMpegDriver()->on('debug', function ($message) {
                     Log::info('FFmpeg: ' . $message);
                 });
@@ -83,6 +86,7 @@ class TranscodingController extends Controller
 
         $videofile = Storage::disk('uploaded')->path($this->video->path);
         if (file_exists($videofile) && is_readable($videofile) && is_writable($videofile)) {
+
             $video = $ffmpeg->open(Storage::disk('uploaded')->path($this->video->path));
 
             $video = $this->applyFilters($video);
@@ -98,10 +102,10 @@ class TranscodingController extends Controller
             $video->save($h264, Storage::disk('converted')->path($this->getTargetFile()));
             $this->video->update([
                 'converted_at' => Carbon::now(),
-                'processed' => Video::PROCESSED,
-                'file' => $this->getTargetFile()
+                'processed' => Video::PROCESSED
             ]);
         }
+
         else {
             Log::debug("File " . $videofile . ' is not readable, please check permissions of the storage folder');
         }
@@ -120,7 +124,7 @@ class TranscodingController extends Controller
 
         $ffmpeg = FFMpeg\FFMpeg::create(self::getFFmpegConfig());
         if(self::getFFmpegConfig()['ffmpeg.debug']) {
-            $ffmpeg->getFFMpegDriver()->listen(new \Alchemy\BinaryDriver\Listeners\DebugListener());
+            $ffmpeg->getFFMpegDriver()->listen(new DebugListener());
             $ffmpeg->getFFMpegDriver()->on('debug', function ($message) {
                 Log::info(__METHOD__ . ' FFmpeg: ' . $message);
             });
@@ -179,7 +183,7 @@ class TranscodingController extends Controller
 
         $ffmpeg = FFMpeg\FFMpeg::create(self::getFFmpegConfig());
         if(self::getFFmpegConfig()['ffmpeg.debug']) {
-            $ffmpeg->getFFMpegDriver()->listen(new \Alchemy\BinaryDriver\Listeners\DebugListener());
+            $ffmpeg->getFFMpegDriver()->listen(new DebugListener());
             $ffmpeg->getFFMpegDriver()->on('debug', function ($message) {
                 Log::info('FFmpeg: ' . $message);
             });
@@ -187,7 +191,7 @@ class TranscodingController extends Controller
 
         $ffprobe = FFMpeg\FFProbe::create(self::getFFmpegConfig());
         if(self::getFFmpegConfig()['ffprobe.debug']) {
-            $ffprobe->getFFProbeDriver()->listen(new \Alchemy\BinaryDriver\Listeners\DebugListener());
+            $ffprobe->getFFProbeDriver()->listen(new DebugListener());
             $ffprobe->getFFProbeDriver()->on('debug', function ($message) {
                 Log::info('FFprobe: ' . $message);
             });
@@ -286,6 +290,7 @@ class TranscodingController extends Controller
             $files = Storage::disk('converted')->files($this->getHLSDirectory());
             $archiveFile = $this->getHLSDirectory() . '.zip';
             Log::info('Archive: ' . $archiveFile);
+
             $archive = new ZipArchive();
 
             if ($archive->open(Storage::disk('converted')->path($archiveFile), ZipArchive::CREATE | ZipArchive::OVERWRITE))
@@ -320,7 +325,7 @@ class TranscodingController extends Controller
                         'size' => $this->video->target['size'],
                         'extension' => $this->video->target['extension'],
                         'created_at' => $this->video->target['created_at'],
-                        'default' => isset($this->video->target['default']) ? $this->video->target['default'] : false,
+                        'default' => $this->video->target['default'] ?? false,
                         'checksum' => md5_file(Storage::disk('converted')->path($archiveFile))
                     ]
                 ]);
@@ -328,7 +333,7 @@ class TranscodingController extends Controller
         else {
             $ffprobe = FFMpeg\FFProbe::create();
             if(self::getFFmpegConfig()['ffprobe.debug']) {
-                $ffprobe->getFFProbeDriver()->listen(new \Alchemy\BinaryDriver\Listeners\DebugListener());
+                $ffprobe->getFFProbeDriver()->listen(new DebugListener());
                 $ffprobe->getFFProbeDriver()->on('debug', function ($message) {
                     Log::info('FFprobe: ' . $message);
                 });
@@ -392,23 +397,25 @@ class TranscodingController extends Controller
                 'finished' => true
             ]
         ]);
+
         Log::debug(__METHOD__ .': '. $response->getReasonPhrase());
 	    Log::debug("Exiting " . __METHOD__);
     }
 
-    public function executeErrorCallback($message)
+    public static function executeErrorCallback($video, $message)
     {
 	    Log::debug("Entering " . __METHOD__);
-        Log::info('Executing error callback for mediakey ' . $this->video->mediakey);
+        Log::info('Executing error callback for mediakey ' . $video->mediakey);
         $guzzle = new Client();
 
-        $api_token = $this->user->api_token;
-        $url = $this->user->url . '/transcoderwebservice/callback';
+        $user = User::find($video->user_id);
+        $api_token = $user->api_token;
+        $url = $user->url . '/transcoderwebservice/callback';
 
         $response = $guzzle->post($url, [
             RequestOptions::JSON => [
                 'api_token' => $api_token,
-                'mediakey' => $this->video->mediakey,
+                'mediakey' => $video->mediakey,
                 'error' => [ 'message' => $message ]
             ]
         ]);

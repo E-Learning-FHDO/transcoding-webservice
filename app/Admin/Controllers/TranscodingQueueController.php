@@ -125,6 +125,7 @@ class TranscodingQueueController extends Controller
         $grid->processed('Processed')->using(['0' => 'No', '1' => 'Yes', '2' => 'Processing']);
         $grid->created_at('Created at');
         $grid->converted_at('Converted at');
+        $grid->failed_at('Failed at');
         $grid->downloaded_at('Downloaded at');
         return $grid;
     }

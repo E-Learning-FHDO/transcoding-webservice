@@ -45,11 +45,6 @@ class CreateThumbnailJob implements ShouldQueue
         {
             Log::info("CreateThumbnailJob Message: " . $exception->getMessage() . ", Code: " . $exception->getCode() . ", Attempt: " . $this->attempts() . ", Class: " . get_class($exception) . ", Trace: " . $exception->getTraceAsString());
             $this->video->update(['processed' => Video::FAILED]);
-
-            Log::info('Exception ' . $exception->getTraceAsString());
-            $this->failAll();
-            $this->transcoder->executeErrorCallback($exception->getMessage());
-            $this->video->update(['failed_at' => Carbon::now()]);
             $this->job->release();
         }
         Log::debug("Exiting " . __METHOD__);
@@ -58,6 +53,10 @@ class CreateThumbnailJob implements ShouldQueue
     public function failed(Throwable $exception)
     {
         Log::debug("Entering " . __METHOD__);
+        $this->video->update(['processed' => Video::FAILED]);
+        $this->failAll();
+        TranscodingController::executeErrorCallback($this->video, $exception->getMessage());
+        Log::debug("Exiting " . __METHOD__);
     }
 
     private function failAll()
@@ -66,8 +65,6 @@ class CreateThumbnailJob implements ShouldQueue
         Log::info('One or more steps of CreateThumbnailJob with download_id ' . $this->video->download_id . ' failed, cancelling all related jobs');
         DownloadFileJob::killAssociatedJobs($this->video->download_id);
         VideoController::deleteAllByMediaKey($this->video->mediakey);
-        $downloadJob = DownloadJob::where('download_id', $this->video->download_id)->where('job_id', $this->job->getJobId());
-        $downloadJob->delete();
         $this->delete();
         Log::debug("Exiting " . __METHOD__);
     }

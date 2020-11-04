@@ -154,6 +154,15 @@ class AdminMenuTableSeeder extends Seeder
                 'parent_id' => 8,
                 'order' => 15,
                 'uri' => '/logs',
+            ),
+            array(
+                'id' => 17,
+                'title' => 'Scheduling',
+                'icon' => 'fa-clock-o',
+                'permission' => 'ext.scheduling',
+                'parent_id' => 0,
+                'order' => 16,
+                'uri' => '/scheduling',
             )
         );
 
