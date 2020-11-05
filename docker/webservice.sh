@@ -12,7 +12,7 @@ function setup_database()
 
         # Wait for database
         tries=0
-        maxTries=20
+        maxTries=100
         until ${mysql} -e "SELECT VERSION();" &> /dev/null; do
             tries=$((tries + 1))
             if [ $tries -gt $maxTries ]; then
@@ -51,6 +51,12 @@ echo "APP_URL: ${APP_URL}"
 
 cd /opt/transcoding-webservice || exit
 
+if [ ! -d vendor ]; then
+ 	echo "Running composer and npm install"
+  composer install
+  npm install
+  npm run prod
+fi
 
 if [ ! -f .env ]; then
 	echo "Generating .env file"
@@ -74,15 +80,6 @@ if [ ! -f .env ]; then
 	echo "FFPROBE_DEBUG=true" >> .env
 
   setup_database
-
-	if [ ! -d vendor ]; then
-        	echo "Running composer and npm install"
-	        composer install
-	        npm install
-	        npm run prod
-	fi
 fi
-
-
 
 /opt/transcoding-webservice/artisan serve --host=0.0.0.0 --port=8000
