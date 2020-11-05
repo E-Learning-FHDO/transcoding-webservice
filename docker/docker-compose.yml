@@ -19,6 +19,8 @@ services:
         environment:
             - MYSQL_ROOT_PASSWORD=root
             - MYSQL_DATABASE=transcoding_webservice
+        volumes:
+            - persistent:/var/lib/mysql
     worker-1:
         build:
             context: .

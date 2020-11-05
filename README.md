@@ -1,7 +1,7 @@
 Transcode video with FFmpeg in Laravel using queues. 
 
-The webservice is based on the PHP framework Laravel and currently uses the database SQLite, but can also be used with other databases. 
-At least PHP version 7.3 is required. Furthermore, the following packages and PHP extensions are required: php-fpm, php-sqlite3 php-xml php-zip php-curl as well as nginx, nodejs, composer and ffmpeg.
+The webservice is based on the PHP framework Laravel. 
+At least PHP version 7.3 is required. Furthermore, the following packages and PHP extensions are required: php-fpm, php-mysql, php-xml, php-zip, php-curl as well as nginx, nodejs, composer and ffmpeg.
 
 
 ### Setup Instructions
