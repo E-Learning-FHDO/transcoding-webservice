@@ -356,15 +356,18 @@ class TranscodingController extends Controller
                     'medium' => [
                         'label' => $this->video->target['label'],
                         'url' => route('getFile', $this->getTargetFile()),
-                        'checksum' => md5_file(Storage::disk('converted')->path($this->getTargetFile()))
+                        'checksum' => md5_file(Storage::disk('converted')->path($this->getTargetFile())),
+                        'default' => $this->video->target['default'] ?? false
                     ],
                     'properties' => [
                         'source_width' => $source_format->get('width'),
                         'source_height' => $source_format->get('height'),
                         'duration' => round($target_format->get('duration'), 0),
-                        'filesize' => $target_format->get('filesize'),
+                        'filesize' => filesize(Storage::disk('converted')->path($this->getTargetFile())),
                         'width' => $target_format->get('width'),
                         'height' => $target_format->get('height'),
+                        'orientation' => $target_format->get('orientation'),
+                        'vbitrate' => $target_format->get('vbitrate'),
                         'source_is360video' => $this->check360Video($source_format)
                     ]
                 ]);
