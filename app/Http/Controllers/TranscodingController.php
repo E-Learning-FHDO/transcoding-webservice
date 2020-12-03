@@ -349,6 +349,9 @@ class TranscodingController extends Controller
                 ->videos()
                 ->first();
 
+            $tags = $target_format->get('tags');
+            $orientation = empty($tags['rotate']) ? 0 : (int) $tags['rotate'];
+
             $requestOptions = array(
                 RequestOptions::JSON => [
                     'api_token' => $api_token,
@@ -366,8 +369,8 @@ class TranscodingController extends Controller
                         'filesize' => filesize(Storage::disk('converted')->path($this->getTargetFile())),
                         'width' => $target_format->get('width'),
                         'height' => $target_format->get('height'),
-                        'orientation' => $target_format->get('orientation'),
-                        'vbitrate' => $target_format->get('vbitrate'),
+                        'orientation' => $orientation,
+                        'vbitrate' => $target_format->get('bit_rate'),
                         'source_is360video' => $this->check360Video($source_format)
                     ]
                 ]);
