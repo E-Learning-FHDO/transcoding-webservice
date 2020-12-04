@@ -3,7 +3,7 @@
 return [
     'ffmpeg' => [
         'binaries' => env('FFMPEG_BINARIES', 'ffmpeg'),
-        'threads' => 12,
+        'threads' => env('FFMPEG_THREADS', 12),
         'debug' => env('FFMPEG_DEBUG', false),
     ],
 
@@ -12,5 +12,5 @@ return [
          'debug' => env('FFPROBE_DEBUG', false),
     ],
 
-    'timeout' => 3600,
+    'timeout' => env('FFMPEG_TIMEOUT', 3600),
 ];
