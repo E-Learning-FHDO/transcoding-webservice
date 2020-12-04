@@ -71,7 +71,9 @@ class VideoController extends Controller
             $filenames = DB::table('videos')->select('file')->whereIn('mediakey', explode(',', $mediakey))->pluck('file')->toArray();
 
             $deleteVideo = Video::where('mediakey', $mediakey)->get();
-            DownloadJob::where('download_id', '=', $deleteVideo->first()->download_id)->delete();
+            if (!empty($deleteVideo->first()->download_id)) {
+                DownloadJob::where('download_id', '=', $deleteVideo->first()->download_id)->delete();
+            }
 
             foreach ($deleteVideo as $video) {
                 if (!empty($video->download)) {
