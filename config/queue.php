@@ -38,21 +38,21 @@ return [
             'driver' => 'database',
             'table' => 'jobs',
             'queue' => 'default',
-            'retry_after' => 90,
+            'retry_after' => 42300,
         ],
 
         'database_download' => [
             'driver' => 'database',
             'table' => 'jobs',
             'queue' => 'download',
-            'retry_after' => 90,
+            'retry_after' => 42300,
         ],
 
         'database_video' => [
             'driver' => 'database',
             'table' => 'jobs',
             'queue' => 'video',
-            'retry_after' => 90,
+            'retry_after' => 42300,
         ],
 
         'beanstalkd' => [
