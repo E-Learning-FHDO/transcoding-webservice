@@ -50,6 +50,7 @@ class TranscodingController extends Controller
     {
         Log::debug("Entering " . __METHOD__);
         $pid = $this->pid = getmypid();
+        $hostname = gethostname();
 
         $this->video->update([
             'processed' => Video::PROCESSING,
@@ -91,9 +92,9 @@ class TranscodingController extends Controller
 
             $video = $this->applyFilters($video);
 
-            $h264->on('progress', function ($video, $format, $percentage, $remaining, $rate) use ($pid, $converted_name) {
+            $h264->on('progress', function ($video, $format, $percentage, $remaining, $rate) use ($pid, $hostname, $converted_name) {
                 if (($percentage % 5) === 0) {
-                    Log::info("PID: $pid, $percentage% of $converted_name transcoded, $remaining sec remaining, rate: $rate fps");
+                    Log::info("Host: $hostname, PID: $pid, $percentage% of $converted_name transcoded, $remaining sec remaining, rate: $rate fps");
                     $this->progress = $percentage;
                 }
             });
