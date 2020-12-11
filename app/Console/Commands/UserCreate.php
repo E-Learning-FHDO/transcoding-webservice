@@ -67,13 +67,15 @@ class UserCreate extends Command
             $user->profile_id = $profile_id;
             $user->save();
 
-            foreach ($role_ids as $role_id) {
-                $this->assignUser($user->id, $role_id);
+            if (is_array($role_ids)) {
+                foreach ($role_ids as $role_id) {
+                    $this->assignUser($user->id, $role_id);
+                    $user->roles = $role_ids;
+                }
             }
 
             if ($this->option('show')) {
                 $user->pass = $password;
-                $user->roles = $role_ids;
                 $this->info($user->toJson(JSON_PRETTY_PRINT));
             }
         }
