@@ -118,8 +118,8 @@ class UserController extends AdminController
 
         $form->ignore(['password_confirmation']);
 
-        $token = Str::random(60);
-        $form->text('api_token')->default(hash('sha256', $token))->rules('required');
+        $token = Str::random(32);
+        $form->text('api_token')->default($token)->rules('required');
         $form->text('url')->rules('required');
 
         $profile = Profile::all()->pluck('encoder', 'id');
