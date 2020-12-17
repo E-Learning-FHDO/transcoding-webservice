@@ -6,6 +6,7 @@ use App\Http\Controllers\VideoController;
 use App\Models\Profile;
 use App\Http\Controllers\Controller;
 use App\Models\Video;
+use App\Models\Worker;
 use Encore\Admin\Controllers\HasResourceActions;
 use Encore\Admin\Controllers\RoleController;
 use Encore\Admin\Facades\Admin;
@@ -17,7 +18,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
-class TranscodingQueueController extends Controller
+class WorkerController extends Controller
 {
     use HasResourceActions;
 
@@ -79,32 +80,14 @@ class TranscodingQueueController extends Controller
             ->body($this->form());
     }
 
-
-    /**
-     * Remove the specified resource from storage.
-     *
-     * @param int $id
-     *
-     * @return \Illuminate\Http\Response
-     */
-    public function destroy($id)
-    {
-        VideoController::deleteById($id);
-        return $this->form()->destroy($id);
-    }
-        /**
+     /**
      * Make a grid builder.
      *
      * @return Grid
      */
     protected function grid()
     {
-        $grid = new Grid(new Video);
-
-        if(!Admin::user()->isAdministrator())
-        {
-            $grid->model()->where('user_id', '=', Admin::user()->id);
-        }
+        $grid = new Grid(new Worker);
 
         $grid->disableCreateButton();
 
@@ -112,33 +95,11 @@ class TranscodingQueueController extends Controller
             $actions->disableEdit();
         });
 
-        $grid->filter(function($filter){
-
-            $filter->disableIdFilter();
-            $filter->equal('mediakey', 'mediakey');
-            $filter->equal('title', 'title');
-            $filter->equal('host', 'host');
-
-        });
-
-
         $grid->id('ID')->sortable();
-        $grid->user()->name()->display(function ($name){
-            return "<a href='users/$this->id'>$name</a>";
-        });
-        $grid->mediakey('Mediakey');
-        $grid->title('Title');
-        $grid->file('File')->display(function ($file){
-            return "<a href='transcodingqueue/$this->id'>$file</a>";
-        });
 
-        $grid->processed('Processed')->using(['0' => 'No', '1' => 'Yes', '2' => 'Processing']);
-        $grid->percentage('Percentage');
         $grid->host('Host');
-        $grid->created_at('Created at');
-        $grid->converted_at('Converted at');
-        $grid->failed_at('Failed at');
-        $grid->downloaded_at('Downloaded at');
+        $grid->description('Description');
+        $grid->last_seen_at('Last seen at');
         return $grid;
     }
 
@@ -150,7 +111,7 @@ class TranscodingQueueController extends Controller
      */
     protected function detail($id)
     {
-        $show = new Show(Video::findOrFail($id));
+        $show = new Show(Worker::findOrFail($id));
         $show->panel()
             ->tools(function ($tools) {
                 $tools->disableEdit();
@@ -158,11 +119,9 @@ class TranscodingQueueController extends Controller
 
 
         $show->id('ID');
-        $show->file('File');
-        $show->target()->as(function ($payload) {
-            return print_r($payload, true);
-        });
-
+        $show->host('Host');
+        $show->description('Description');
+        $show->last_seen_at('Last seen at');
         return $show;
     }
 
@@ -173,7 +132,7 @@ class TranscodingQueueController extends Controller
      */
     protected function form()
     {
-        $form = new Form(new Video);
+        $form = new Form(new Worker);
 
         //$form->display('ID');
         $form->text('file','File');

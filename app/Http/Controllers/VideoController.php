@@ -7,6 +7,8 @@ use App\Models\Download;
 use App\Models\DownloadJob;
 use App\Models\Video;
 use Carbon\Carbon;
+use GuzzleHttp\Client;
+use GuzzleHttp\RequestOptions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -71,9 +73,7 @@ class VideoController extends Controller
             $filenames = DB::table('videos')->select('file')->whereIn('mediakey', explode(',', $mediakey))->pluck('file')->toArray();
 
             $deleteVideo = Video::where('mediakey', $mediakey)->get();
-            if (!empty($deleteVideo->first()->download_id)) {
-                DownloadJob::where('download_id', '=', $deleteVideo->first()->download_id)->delete();
-            }
+            DownloadJob::where('download_id', '=', $deleteVideo->first()->download_id)->delete();
 
             foreach ($deleteVideo as $video) {
                 if (!empty($video->download)) {
@@ -115,5 +115,34 @@ class VideoController extends Controller
             Log::debug("Exiting " . __METHOD__);
             return response()->json('Not found')->setStatusCode(404);
         }
+    }
+
+    public function testUrl(Request $request)
+    {
+        Log::debug("Entering " . __METHOD__);
+        $api_token = $request->input('api_token', false);
+        $url = $request->input('url', false);
+        if ($api_token && $url) {
+            $guzzle = new Client();
+            $requestOptions = array(
+                RequestOptions::JSON => [
+                    'api_token' => $api_token,
+                ]);
+
+            try {
+                $response = $guzzle->post($url . '/transcoderwebservice/version', $requestOptions);
+                $body = json_decode($response->getBody()->getContents());
+
+                Log::debug("Exiting " . __METHOD__);
+
+                return response()->json($body)->setStatusCode($response->getStatusCode());
+            }
+            catch (\Throwable $exception) {
+                Log::debug("Exiting " . __METHOD__);
+                return response()->json(['message' => 'Error'])->setStatusCode(400);
+            }
+        }
+        Log::debug("Exiting " . __METHOD__);
+        return response()->json(['message' => 'Error'])->setStatusCode(404);
     }
 }

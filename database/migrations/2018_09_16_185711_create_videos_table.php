@@ -23,6 +23,8 @@ class CreateVideosTable extends Migration
             $table->string('path');
             $table->longText('target');
             $table->string('file')->nullable();
+            $table->string('worker')->nullable();
+            $table->integer('percentage')->nullable();
             $table->boolean('processed')->default(false);
             $table->datetime('converted_at')->nullable();
             $table->datetime('downloaded_at')->nullable();

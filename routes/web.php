@@ -25,9 +25,12 @@ Route::group(['prefix' => 'api', 'middleware' => ['auth:api']], function(){
     Route::post('/download/{filename}/finished', 'VideoController@setDownloadFinished')->name('setDownloadFinished');
     Route::get('/status/{mediakey}', 'VideoController@getStatus')->name('getStatus');
     Route::delete('/delete/{mediakey}', 'VideoController@deleteAllByMediakey')->name('deleteAllByMediakey');
+    Route::post('/testurl', 'VideoController@testUrl');
 
     Route::group(['prefix' => 'jobs'], function(){
         Route::get('/video', 'VideoController@jobs')->name('downloadJobs');
         Route::get('/download', 'DownloadController@jobs')->name('videoJobs');
     });
 });
+
+

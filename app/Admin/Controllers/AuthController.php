@@ -128,6 +128,56 @@ class AuthController extends Controller
 
         $form = new Form(new $class());
 
+        $string =
+            <<<EOT
+
+<a href="#" id="testbtn""><span class="btn-flat">Test Connection</span></a><script>
+
+$('#testbtn').on('click', function() {
+
+    $.ajaxSetup({
+        headers: {
+            'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content'),
+            'Authorization': 'Bearer ' + $('#api_token').val()
+        }
+    });
+    
+    $.ajax({
+        method: 'post',
+        dataType: "json",
+        url: '/api/testurl',
+        data: {
+            url: $('#url').val(),
+            api_token: $('#api_token').val()
+        },
+        beforeSend: function() { $('#testbtn').text('Testing Connection...'); },
+        complete: function() { $('#testbtn').text('Test Connection'); },
+        success: function (data) {
+            swal({
+              title: "Success",
+                html: "Connection to " +  $('#url').val() + " was successful!" + "<br/>" +
+                 "Endpoint "  + data.name + ", version: " + data.version,
+                icon: "success",
+                type: "success",
+                button: "OK",
+            });
+        },
+        error: function (data) {
+              swal({
+              title: "Failure",
+                html: "Connection to " +  $('#url').val() + " failed!" + "<br/>" + 
+                "Error: " + data.status,
+                icon: "error",
+                type: "error",
+                button: "OK",
+            });
+        }
+    });
+});
+
+</script>
+EOT;
+
         $form->display('email', trans('admin.email'));
         $form->text('name', trans('admin.name'))->rules('required');
         $form->image('avatar', trans('admin.avatar'));
@@ -137,7 +187,9 @@ class AuthController extends Controller
                 return $form->model()->password;
             });
 
-        $form->text('url')->rules('required');
+        $form->text('url')->rules('required')->append($string);
+
+
         $form->text('api_token')->rules('required');
         $form->setAction(admin_url('auth/setting'));
 

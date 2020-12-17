@@ -7,6 +7,7 @@ use App\Format\Video\H264;
 use App\Models\Download;
 use App\Models\Profile;
 use App\Models\Video;
+use App\Models\Worker;
 use App\User;
 use Carbon\Carbon;
 use Exception;
@@ -15,6 +16,7 @@ use GuzzleHttp\Client;
 use GuzzleHttp\RequestOptions;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -25,6 +27,9 @@ use Throwable;
 
 class TranscodingController extends Controller
 {
+    public const TRANSCODERWEBSERVICE_CALLBACK = '/transcoderwebservice/callback';
+    public const SPRITEMAP_DEFAULT_WIDTH = 142;
+    public const SPRITEMAP_DEFAULT_HEIGHT = 80;
 
     public $video;
     private $dimension;
@@ -35,7 +40,7 @@ class TranscodingController extends Controller
     private $attempts;
     private $progress;
     private $pid;
-    private $error;
+    private $host;
 
     public function __construct(Video $video, Dimension $dimension, $attempts)
     {
@@ -44,17 +49,43 @@ class TranscodingController extends Controller
         $this->attempts = $attempts;
         $this->user = User::find($this->video->user_id);
         $this->profile = $this->user->profile;
+        $this->host = gethostname();
+    }
+
+    public function updateWorkerStatus()
+    {
+
+        try {
+            $date = Carbon::now();
+
+            Log::debug('Transaction begin for create host ' . $this->host . ' and date ' . $date);
+            $worker = Worker::create([
+                'host' => $this->host,
+                'last_seen_at' => $date,
+                'description' => gethostbyname($this->host)
+            ]);
+        }
+        catch(Throwable $exception)
+        {
+            Log::debug('Transaction begin for update host ' . $this->host . ' and date ' . $date);
+
+            $worker = Worker::where('host', '=', $this->host)->find(1);
+            if ($worker !== null) {
+                $worker->update(['last_seen_at' => $date]);
+            }
+        }
     }
 
     public function transcode()
     {
         Log::debug("Entering " . __METHOD__);
         $pid = $this->pid = getmypid();
-        $hostname = gethostname();
 
+        $this->updateWorkerStatus();
         $this->video->update([
             'processed' => Video::PROCESSING,
-            'file' => $this->getTargetFile()
+            'file' => $this->getTargetFile(),
+            'host' => $this->host
         ]);
 
         $this->prepare();
@@ -92,18 +123,22 @@ class TranscodingController extends Controller
 
             $video = $this->applyFilters($video);
 
-            $h264->on('progress', function ($video, $format, $percentage, $remaining, $rate) use ($pid, $hostname, $converted_name) {
-                if (($percentage % 5) === 0) {
-                    Log::info("Host: $hostname, PID: $pid, $percentage% of $converted_name transcoded, $remaining sec remaining, rate: $rate fps");
-                    $this->progress = $percentage;
-                }
+            $h264->on('progress', function ($video, $format, $percentage, $remaining, $rate) use ($pid, $converted_name) {
+                //if (($percentage % 5) === 0) {
+                    Log::info("Host: $this->host, PID: $pid, $percentage% of $converted_name transcoded, $remaining sec remaining, rate: $rate fps");
+                    $this->progress = (int) $percentage;
+                    $this->video->update([
+                        'percentage' => $this->progress,
+                    ]);
+                //}
             });
 
             Log::debug('Executing ' . print_r($video->getFinalCommand($h264, Storage::disk('converted')->path($this->getTargetFile())), true));
             $video->save($h264, Storage::disk('converted')->path($this->getTargetFile()));
             $this->video->update([
                 'converted_at' => Carbon::now(),
-                'processed' => Video::PROCESSED
+                'processed' => Video::PROCESSED,
+                'percentage' => 100
             ]);
         }
 
@@ -117,6 +152,7 @@ class TranscodingController extends Controller
     public function createThumbnail()
     {
         Log::debug("Entering " . __METHOD__);
+
         $payload = $this->video->target;
         $target = $payload['thumbnail_item'];
 
@@ -140,13 +176,15 @@ class TranscodingController extends Controller
             $this->video->update([
                 'converted_at' => Carbon::now(),
                 'processed' => Video::PROCESSED,
-                'file' => $converted_name
+                'percentage' => 100,
+                'file' => $converted_name,
+                'host' => $this->host
             ]);
 
             $guzzle = new Client();
 
             $api_token = $this->user->api_token;
-            $url = $this->user->url . '/transcoderwebservice/callback';
+            $url = $this->user->url . self::TRANSCODERWEBSERVICE_CALLBACK;
 
             $response = $guzzle->post($url, [
                 RequestOptions::JSON => [
@@ -179,8 +217,8 @@ class TranscodingController extends Controller
 
         $converted_name = $this->video->path . '_' . $payload['source']['created_at'] . '_sprites.jpg';
 
-        $target_width = isset($spritemap['width']) ? $spritemap['width'] : 142;
-        $target_height = isset($spritemap['height']) ? $spritemap['height'] : 80;
+        $target_width = $spritemap['width'] ?? self::SPRITEMAP_DEFAULT_WIDTH;
+        $target_height = $spritemap['height'] ?? self::SPRITEMAP_DEFAULT_HEIGHT;
 
         $ffmpeg = FFMpeg\FFMpeg::create(self::getFFmpegConfig());
         if(self::getFFmpegConfig()['ffmpeg.debug']) {
@@ -215,13 +253,15 @@ class TranscodingController extends Controller
             $this->video->update([
                 'converted_at' => Carbon::now(),
                 'processed' => Video::PROCESSED,
-                'file' => $converted_name
+                'percentage' => 100,
+                'file' => $converted_name,
+                'host' => $this->host
             ]);
 
             $guzzle = new Client();
 
             $api_token = $this->user->api_token;
-            $url = $this->user->url . '/transcoderwebservice/callback';
+            $url = $this->user->url . self::TRANSCODERWEBSERVICE_CALLBACK;
 
             $response = $guzzle->post($url, [
                 RequestOptions::JSON => [
@@ -284,34 +324,11 @@ class TranscodingController extends Controller
         Log::debug("Entering " . __METHOD__);
         $guzzle = new Client();
         $api_token = $this->user->api_token;
-        $url = $this->user->url . '/transcoderwebservice/callback';
+        $url = $this->user->url . self::TRANSCODERWEBSERVICE_CALLBACK;
 
         if ($this->getHLS())
         {
-            $files = Storage::disk('converted')->files($this->getHLSDirectory());
-            $archiveFile = $this->getHLSDirectory() . '.zip';
-            Log::info('Archive: ' . $archiveFile);
-
-            $archive = new ZipArchive();
-
-            if ($archive->open(Storage::disk('converted')->path($archiveFile), ZipArchive::CREATE | ZipArchive::OVERWRITE))
-            {
-                foreach ($files as $file)
-                {
-                    if ($archive->addFile(Storage::disk('converted')->path($file), basename($file)))
-                    {
-                        continue;
-                    }
-                    throw new Exception("File [`{$file}`] could not be added to the zip file: " . $archive->getStatusString());
-                }
-
-                if ($archive->close())
-                {
-                    $this->video->update([
-                        'file' => $archiveFile
-                    ]);
-                }
-            }
+            $archiveFile = $this->createHLSArchive();
 
             $requestOptions = array(
                 RequestOptions::JSON => [
@@ -395,7 +412,7 @@ class TranscodingController extends Controller
         $guzzle = new Client();
 
         $api_token = $this->user->api_token;
-        $url = $this->user->url . '/transcoderwebservice/callback';
+        $url = $this->user->url . self::TRANSCODERWEBSERVICE_CALLBACK;
 
         $response = $guzzle->post($url, [
             RequestOptions::JSON => [
@@ -417,7 +434,7 @@ class TranscodingController extends Controller
 
         $user = User::find($video->user_id);
         $api_token = $user->api_token;
-        $url = $user->url . '/transcoderwebservice/callback';
+        $url = $user->url . self::TRANSCODERWEBSERVICE_CALLBACK;
 
         $response = $guzzle->post($url, [
             RequestOptions::JSON => [
@@ -583,5 +600,34 @@ class TranscodingController extends Controller
         catch (Exception $exception) {
             return $exception->getMessage();
         }
+    }
+
+    /**
+     * @return string
+     * @throws Exception
+     */
+    protected function createHLSArchive(): string
+    {
+        $files = Storage::disk('converted')->files($this->getHLSDirectory());
+        $archiveFile = $this->getHLSDirectory() . '.zip';
+        Log::info('Archive: ' . $archiveFile);
+
+        $archive = new ZipArchive();
+
+        if ($archive->open(Storage::disk('converted')->path($archiveFile), ZipArchive::CREATE | ZipArchive::OVERWRITE)) {
+            foreach ($files as $file) {
+                if ($archive->addFile(Storage::disk('converted')->path($file), basename($file))) {
+                    continue;
+                }
+                throw new Exception("File [`{$file}`] could not be added to the zip file: " . $archive->getStatusString());
+            }
+
+            if ($archive->close()) {
+                $this->video->update([
+                    'file' => $archiveFile
+                ]);
+            }
+        }
+        return $archiveFile;
     }
 }

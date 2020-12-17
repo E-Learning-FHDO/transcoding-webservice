@@ -163,6 +163,15 @@ class AdminMenuTableSeeder extends Seeder
                 'parent_id' => 0,
                 'order' => 16,
                 'uri' => '/scheduling',
+            ),
+            array(
+                'id' => 18,
+                'title' => 'Workers',
+                'icon' => 'fa-cogs',
+                'permission' => 'null',
+                'parent_id' => 0,
+                'order' => 17,
+                'uri' => '/workers',
             )
         );
 

@@ -98,7 +98,55 @@ class UserController extends AdminController
         $roleModel = config('admin.database.roles_model');
 
         $form = new Form(new $userModel());
+        $string =
+            <<<EOT
 
+<a href="#" id="testbtn""><span class="btn-flat">Test Connection</span></a><script>
+
+$('#testbtn').on('click', function() {
+
+    $.ajaxSetup({
+        headers: {
+            'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content'),
+            'Authorization': 'Bearer ' + $('#api_token').val()
+        }
+    });
+    
+    $.ajax({
+        method: 'post',
+        dataType: "json",
+        url: '/api/testurl',
+        data: {
+            url: $('#url').val(),
+            api_token: $('#api_token').val()
+        },
+        beforeSend: function() { $('#testbtn').text('Testing Connection...'); },
+        complete: function() { $('#testbtn').text('Test Connection'); },
+        success: function (data) {
+            swal({
+              title: "Success",
+                html: "Connection to " +  $('#url').val() + " was successful!" + "<br/>" +
+                 "Endpoint "  + data.name + ", version: " + data.version,
+                icon: "success",
+                type: "success",
+                button: "OK",
+            });
+        },
+        error: function (data) {
+              swal({
+              title: "Failure",
+                html: "Connection to " +  $('#url').val() + " failed!" + "<br/>" + 
+                "Error: " + data.status,
+                icon: "error",
+                type: "error",
+                button: "OK",
+            });
+        }
+    });
+});
+
+</script>
+EOT;
         $userTable = config('admin.database.users_table');
         $connection = config('admin.database.connection');
 
@@ -120,7 +168,7 @@ class UserController extends AdminController
 
         $token = Str::random(32);
         $form->text('api_token')->default($token)->rules('required');
-        $form->text('url')->rules('required');
+        $form->text('url')->rules('required')->append($string);
 
         $profile = Profile::all()->pluck('encoder', 'id');
 

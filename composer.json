@@ -12,7 +12,7 @@
         "ext-intl": "*",
         "ext-json": "*",
         "ext-zip": "*",
-        "encore/laravel-admin": "^1.7",
+        "encore/laravel-admin": "^1.8.11",
         "fideloper/proxy": "^4.0",
         "guzzlehttp/guzzle": "^6.5",
         "jxlwqq/material-ui": "^1.0",

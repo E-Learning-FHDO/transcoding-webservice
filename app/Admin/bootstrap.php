@@ -17,5 +17,16 @@
  * Admin::js('/packages/prettydocs/js/main.js');
  *
  */
+use Encore\Admin\Facades\Admin;
+use App\Admin\Extensions\Nav;
+use App\Admin\Actions;
 
 Encore\Admin\Form::forget(['map', 'editor']);
+
+Admin::navbar(function (\Encore\Admin\Widgets\Navbar $navbar) {
+    $navbar->right(new Nav\AutoRefresh())
+        ->right(new Actions\ClearCache())
+        ->right(new Actions\Feedback());
+
+    $navbar->left(view('admin.search-bar'));
+});
