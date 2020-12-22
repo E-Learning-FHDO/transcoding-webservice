@@ -134,7 +134,7 @@ class TranscodingQueueController extends Controller
 
         $grid->processed('Processed')->using(['0' => 'No', '1' => 'Yes', '2' => 'Processing']);
         $grid->percentage('Percentage');
-        $grid->host('Host');
+        $grid->worker('Worker');
         $grid->created_at('Created at');
         $grid->converted_at('Converted at');
         $grid->failed_at('Failed at');
