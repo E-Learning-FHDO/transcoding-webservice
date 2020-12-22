@@ -13,7 +13,8 @@ class Kernel extends ConsoleKernel
      * @var array
      */
     protected $commands = [
-         Commands\CleanupTranscode::class
+         Commands\CleanupTranscode::class,
+         Commands\Version::class
     ];
 
     /**
