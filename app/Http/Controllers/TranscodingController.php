@@ -40,7 +40,7 @@ class TranscodingController extends Controller
     private $attempts;
     private $progress;
     private $pid;
-    private $host;
+    private $worker;
 
     public function __construct(Video $video, Dimension $dimension, $attempts)
     {
@@ -49,7 +49,7 @@ class TranscodingController extends Controller
         $this->attempts = $attempts;
         $this->user = User::find($this->video->user_id);
         $this->profile = $this->user->profile;
-        $this->host = gethostname();
+        $this->worker = gethostname();
     }
 
     public function updateWorkerStatus()
@@ -58,18 +58,18 @@ class TranscodingController extends Controller
         try {
             $date = Carbon::now();
 
-            Log::debug('Transaction begin for create host ' . $this->host . ' and date ' . $date);
+            Log::debug('Transaction begin for create host ' . $this->worker . ' and date ' . $date);
             $worker = Worker::create([
-                'host' => $this->host,
+                'host' => $this->worker,
                 'last_seen_at' => $date,
-                'description' => gethostbyname($this->host)
+                'description' => gethostbyname($this->worker)
             ]);
         }
         catch(Throwable $exception)
         {
-            Log::debug('Transaction begin for update host ' . $this->host . ' and date ' . $date);
+            Log::debug('Transaction begin for update host ' . $this->worker . ' and date ' . $date);
 
-            $worker = Worker::where('host', '=', $this->host)->find(1);
+            $worker = Worker::where('host', '=', $this->worker)->find(1);
             if ($worker !== null) {
                 $worker->update(['last_seen_at' => $date]);
             }
@@ -85,7 +85,7 @@ class TranscodingController extends Controller
         $this->video->update([
             'processed' => Video::PROCESSING,
             'file' => $this->getTargetFile(),
-            'host' => $this->host
+            'worker' => $this->worker
         ]);
 
         $this->prepare();
@@ -125,7 +125,7 @@ class TranscodingController extends Controller
 
             $h264->on('progress', function ($video, $format, $percentage, $remaining, $rate) use ($pid, $converted_name) {
                 //if (($percentage % 5) === 0) {
-                    Log::info("Host: $this->host, PID: $pid, $percentage% of $converted_name transcoded, $remaining sec remaining, rate: $rate fps");
+                    Log::info("Host: $this->worker, PID: $pid, $percentage% of $converted_name transcoded, $remaining sec remaining, rate: $rate fps");
                     $this->progress = (int) $percentage;
                     $this->video->update([
                         'percentage' => $this->progress,
@@ -178,7 +178,7 @@ class TranscodingController extends Controller
                 'processed' => Video::PROCESSED,
                 'percentage' => 100,
                 'file' => $converted_name,
-                'host' => $this->host
+                'worker' => $this->worker
             ]);
 
             $guzzle = new Client();
@@ -255,7 +255,7 @@ class TranscodingController extends Controller
                 'processed' => Video::PROCESSED,
                 'percentage' => 100,
                 'file' => $converted_name,
-                'host' => $this->host
+                'worker' => $this->worker
             ]);
 
             $guzzle = new Client();
