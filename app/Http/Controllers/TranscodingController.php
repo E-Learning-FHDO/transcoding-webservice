@@ -54,11 +54,8 @@ class TranscodingController extends Controller
 
     public function updateWorkerStatus()
     {
-
         try {
             $date = Carbon::now();
-
-            Log::debug('Transaction begin for create host ' . $this->worker . ' and date ' . $date);
             $worker = Worker::create([
                 'host' => $this->worker,
                 'last_seen_at' => $date,
@@ -67,8 +64,6 @@ class TranscodingController extends Controller
         }
         catch(Throwable $exception)
         {
-            Log::debug('Transaction begin for update host ' . $this->worker . ' and date ' . $date);
-
             $worker = Worker::where('host', '=', $this->worker)->find(1);
             if ($worker !== null) {
                 $worker->update(['last_seen_at' => $date]);

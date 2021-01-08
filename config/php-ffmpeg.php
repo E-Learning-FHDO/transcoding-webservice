@@ -9,7 +9,7 @@ return [
 
     'ffprobe' => [
         'binaries' => env('FFPROBE_BINARIES', 'ffprobe'),
-         'debug' => env('FFPROBE_DEBUG', false),
+        'debug' => env('FFPROBE_DEBUG', false),
     ],
 
     'timeout' => env('FFMPEG_TIMEOUT', 3600),

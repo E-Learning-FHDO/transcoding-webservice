@@ -17,7 +17,7 @@ class CreateWorkersTable extends Migration
             $table->increments('id');
             $table->string('host')->unique();
             $table->longText('description')->nullable();
-            $table->datetime('lsat_seen_at')->nullable();
+            $table->timestamp('last_seen_at')->nullable();
             $table->timestamps();
         });
     }
