@@ -206,7 +206,7 @@ class TranscodingController extends Controller
 
     public function createSpritemap()
     {
-	    Log::debug("Entering " . __METHOD__);
+        Log::debug("Entering " . __METHOD__);
         $payload = $this->video->target;
         $spritemap = $payload['spritemap'];
 
@@ -233,16 +233,13 @@ class TranscodingController extends Controller
 
         $videofile = Storage::disk('uploaded')->path($this->video->path);
         if (file_exists($videofile) && is_readable($videofile) && is_writable($videofile)) {
-            $source_format = $ffprobe
-                ->streams($videofile)
-                ->videos()
-                ->first();
-
+            $duration = $ffprobe->format($videofile)->get('duration');
             $video = $ffmpeg->open(Storage::disk('uploaded')->path($this->video->path));
-            $fps = $spritemap['count'] / ceil($source_format->get('duration'));
+            Log::debug("Spritemap count: " . $spritemap['count'] . ", duration: " . $duration);
+            $fps = $spritemap['count'] / ceil($duration);
 
             $video->frame(FFMpeg\Coordinate\TimeCode::fromSeconds(0))
-                ->addFilter(new CustomFrameFilter('scale=' . $target_width . ':' . $target_height . ',fps=' . $fps . ',tile=10x10:margin=2:padding=2'))
+                ->addFilter(new CustomFrameFilter('select=eq(pict_type\,PICT_TYPE_I),mpdecimate,scale=' . $target_width . ':' . $target_height . ',fps=' . $fps . ',tile=10x10:margin=2:padding=2'))
                 ->save(Storage::disk('converted')->path($converted_name));
 
             $this->video->update([
