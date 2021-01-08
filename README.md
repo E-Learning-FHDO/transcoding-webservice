@@ -37,6 +37,13 @@ php7.3-json php7.3-gd mariadb-server mariadb-client
 $ wget --quiet -O - https://deb.nodesource.com/setup_12.x | bash - \
     && apt-get update && apt-get install -y nodejs
 ```
+- Create a database and user:
+```
+CREATE USER 'transcoding_webservice'@'%' IDENTIFIED BY 'password';
+CREATE DATABASE transcoding_webservice;
+GRANT ALL PRIVILEGES ON transcoding_webservice.* TO 'transcoding_webservice'@'%' WITH GRANT OPTION;
+FLUSH PRIVILEGES;
+```
 
 - Download the project files via git to preferred directory (e.g. /opt/transcoding-webservice) and get into it:
 ```
@@ -47,7 +54,7 @@ $ cd transcoding-webservice
 
 - Copy the sample environment configuration file:
 ```
-$ cp env.sample .env
+$ cp env.exsample .env
 ```
 Edit .env with your favorite text editor:
 - Set APP_URL to your webserver URL.
@@ -68,8 +75,8 @@ DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
 DB_PORT=3306
 DB_DATABASE=transcoding_webservice
-DB_USERNAME=root
-DB_PASSWORD=
+DB_USERNAME=transcoding_webservice
+DB_PASSWORD=password
 ```
 - Save and close the .env file
 - Run composer to install php dependencies 
