@@ -138,7 +138,7 @@ server {
 ##### Configure cron job for task scheduling
 Create file /etc/cron.d/transcoding-webservice with following content, adjust the path according your needs
 ```
-* * * * * root cd /opt/transcoding-webservice && php artisan schedule:run >> /dev/null 2>&1
+* * * * * www-data cd /opt/transcoding-webservice && php artisan schedule:run >> /dev/null 2>&1
 ```
 #### Worker setup
 The worker should be able to access the project root using the same shared storage, which the webservice has access to. 
@@ -154,7 +154,7 @@ php7.3-json php7.3-gd mariadb-client
 
 ##### Running queue worker
 ```
-$ php artisan queue:work --tries=3 --queue=download,video --timeout=84600 --memory=1024
+$ sudo -u www-data php artisan queue:work --tries=3 --queue=download,video --timeout=84600 --memory=1024
 ```
 
 ##### Install queue worker as systemd service
