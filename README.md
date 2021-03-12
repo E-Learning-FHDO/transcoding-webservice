@@ -25,6 +25,7 @@ php-fpm, php-mysql, php-xml, php-zip, php-curl, php-mbstring, php-intl as well a
 
 ### Setup Instructions
 This instruction should fit for most Debian-based Linux distributions.
+The following commands should be executed with root privileges.
 
 #### Webservice setup
 - Install required packages on the webservice host:
@@ -54,7 +55,7 @@ $ cd transcoding-webservice
 
 - Copy the sample environment configuration file:
 ```
-$ cp env.exsample .env
+$ cp env.example .env
 ```
 Edit .env with your favorite text editor:
 - Set APP_URL to your webserver URL.
