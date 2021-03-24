@@ -26,6 +26,7 @@ class TranscodingDashboard
         $envs = [
             ['name' => 'PHP version',       'value' => 'PHP/'.PHP_VERSION],
             ['name' => 'Laravel version',   'value' => app()->version()],
+            ['name' => 'Laravel admin version',        'value' => Admin::VERSION],
             ['name' => 'CGI',               'value' => php_sapi_name()],
             ['name' => 'Uname',             'value' => php_uname()],
             ['name' => 'Server',            'value' => Arr::get($_SERVER, 'SERVER_SOFTWARE')],

@@ -5,7 +5,7 @@ namespace App\Console\Commands;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
-use App\User;
+use App\Models\User;
 use Illuminate\Support\Str;
 
 class UserList extends Command

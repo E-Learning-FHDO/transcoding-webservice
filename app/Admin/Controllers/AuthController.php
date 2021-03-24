@@ -166,7 +166,7 @@ $('#testbtn').on('click', function() {
               swal({
               title: "Failure",
                 html: "Connection to " +  $('#url').val() + " failed!" + "<br/>" + 
-                "Error: " + data.status,
+                "Error: " + data.responseJSON.message,
                 icon: "error",
                 type: "error",
                 button: "OK",

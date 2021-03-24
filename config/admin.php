@@ -124,7 +124,7 @@ return [
         'providers' => [
             'admin' => [
                 'driver' => 'eloquent',
-                'model'  => App\Admin\Models\Administrator::class,
+                'model'  => App\Models\Administrator::class,
             ],
         ],
 
@@ -177,7 +177,7 @@ return [
 
         // User tables and model.
         'users_table' => 'users',
-        'users_model' => App\Admin\Models\Administrator::class,
+        'users_model' => App\Models\Administrator::class,
 
         // Role table and model.
         'roles_table' => 'admin_roles',

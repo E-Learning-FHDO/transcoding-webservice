@@ -2,9 +2,9 @@
 
 namespace App\Admin\Controllers;
 
-use App\Admin\Models\Administrator;
+use App\Models\Administrator;
 use App\Models\Profile;
-use App\User;
+use App\Models\User;
 use Encore\Admin\Controllers\AdminController;
 use Encore\Admin\Form;
 use Encore\Admin\Grid;
@@ -136,7 +136,7 @@ $('#testbtn').on('click', function() {
               swal({
               title: "Failure",
                 html: "Connection to " +  $('#url').val() + " failed!" + "<br/>" + 
-                "Error: " + data.status,
+                "Error: " + data.responseJSON.message,
                 icon: "error",
                 type: "error",
                 button: "OK",

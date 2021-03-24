@@ -139,7 +139,7 @@ class VideoController extends Controller
             }
             catch (\Throwable $exception) {
                 Log::debug("Exiting " . __METHOD__);
-                return response()->json(['message' => 'Error'])->setStatusCode(400);
+		return response()->json(['message' => $exception->getMessage()])->setStatusCode(400);
             }
         }
         Log::debug("Exiting " . __METHOD__);

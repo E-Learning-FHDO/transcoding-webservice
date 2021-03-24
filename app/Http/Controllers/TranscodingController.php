@@ -8,7 +8,7 @@ use App\Models\Download;
 use App\Models\Profile;
 use App\Models\Video;
 use App\Models\Worker;
-use App\User;
+use App\Models\User;
 use Carbon\Carbon;
 use Exception;
 use FFMpeg\Filters\Frame\CustomFrameFilter;
@@ -16,6 +16,7 @@ use GuzzleHttp\Client;
 use GuzzleHttp\RequestOptions;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -54,21 +55,24 @@ class TranscodingController extends Controller
 
     public function updateWorkerStatus()
     {
+        Log::debug("Entering " . __METHOD__);
         try {
-            $date = Carbon::now();
-            $worker = Worker::create([
-                'host' => $this->worker,
-                'last_seen_at' => $date,
-                'description' => gethostbyname($this->worker)
-            ]);
+            Cache::lock('worker-' . $this->worker)->get(function () {
+                $date = Carbon::now();
+                Worker::updateOrCreate([
+                    'host' => $this->worker
+                ],[
+                    'last_seen_at' => $date,
+                    'description' => gethostbyname($this->worker)
+                ]);
+            });
+
         }
         catch(Throwable $exception)
         {
-            $worker = Worker::where('host', '=', $this->worker)->find(1);
-            if ($worker !== null) {
-                $worker->update(['last_seen_at' => $date]);
-            }
+		Log::debug("Failed to update or create worker $this->worker: " . $exception->getMessage());
         }
+	Log::debug("Exiting " . __METHOD__);
     }
 
     public function transcode()
@@ -76,10 +80,11 @@ class TranscodingController extends Controller
         Log::debug("Entering " . __METHOD__);
         $pid = $this->pid = getmypid();
 
+	$start = now();
         $this->updateWorkerStatus();
         $this->video->update([
             'processed' => Video::PROCESSING,
-            'file' => $this->getTargetFile(),
+            'file' => $this->getTargetFileName(),
             'worker' => $this->worker
         ]);
 
@@ -87,7 +92,7 @@ class TranscodingController extends Controller
 
         $target = $this->video->target;
 
-        $converted_name = $this->getTargetFile();
+        $converted_name = $this->getTargetFileName();
         Log::info("Clip: $converted_name, encoder: " . $this->profile->encoder . ", attempt: $this->attempts");
         $fallback_profile = Profile::find($this->user->profile->fallback_id);
         if ($this->attempts > 1  && !empty($fallback_profile)) {
@@ -119,17 +124,19 @@ class TranscodingController extends Controller
             $video = $this->applyFilters($video);
 
             $h264->on('progress', function ($video, $format, $percentage, $remaining, $rate) use ($pid, $converted_name) {
-                //if (($percentage % 5) === 0) {
+		if ($percentage !== 0 && $remaining !== 0 && $rate !== 0) {
                     Log::info("Host: $this->worker, PID: $pid, $percentage% of $converted_name transcoded, $remaining sec remaining, rate: $rate fps");
                     $this->progress = (int) $percentage;
                     $this->video->update([
                         'percentage' => $this->progress,
                     ]);
-                //}
+                }
             });
 
-            Log::debug('Executing ' . print_r($video->getFinalCommand($h264, Storage::disk('converted')->path($this->getTargetFile())), true));
-            $video->save($h264, Storage::disk('converted')->path($this->getTargetFile()));
+            Log::debug('Executing ' . print_r($video->getFinalCommand($h264, Storage::disk('converted')->path($this->getTargetFileName())), true));
+            $video->save($h264, Storage::disk('converted')->path($this->getTargetFileName()));
+            $time = $start->diffInSeconds(now());
+            Log::debug("Conversion in " . __METHOD__ . " of " . $this->getTargetFileName() . " took $time seconds");
             $this->video->update([
                 'converted_at' => Carbon::now(),
                 'processed' => Video::PROCESSED,
@@ -148,6 +155,7 @@ class TranscodingController extends Controller
     {
         Log::debug("Entering " . __METHOD__);
 
+	$start = now();
         $payload = $this->video->target;
         $target = $payload['thumbnail_item'];
 
@@ -167,6 +175,9 @@ class TranscodingController extends Controller
             $ffmpeg->open($videofile)
                 ->frame(FFMpeg\Coordinate\TimeCode::fromSeconds($target[$key]['second']))
                 ->save(Storage::disk('converted')->path($converted_name));
+
+            $time = $start->diffInSeconds(now());
+            Log::debug("Conversion in " . __METHOD__ . " of " . $converted_name ." took $time seconds", ['name' => $converted_name]);
 
             $this->video->update([
                 'converted_at' => Carbon::now(),
@@ -207,6 +218,8 @@ class TranscodingController extends Controller
     public function createSpritemap()
     {
         Log::debug("Entering " . __METHOD__);
+
+	$start = now();
         $payload = $this->video->target;
         $spritemap = $payload['spritemap'];
 
@@ -241,6 +254,9 @@ class TranscodingController extends Controller
             $video->frame(FFMpeg\Coordinate\TimeCode::fromSeconds(0))
                 ->addFilter(new CustomFrameFilter('select=eq(pict_type\,PICT_TYPE_I),mpdecimate,scale=' . $target_width . ':' . $target_height . ',fps=' . $fps . ',tile=10x10:margin=2:padding=2'))
                 ->save(Storage::disk('converted')->path($converted_name));
+
+            $time = $start->diffInSeconds(now());
+            Log::debug("Conversion in " . __METHOD__ . " of " . $converted_name ." took $time seconds", ['name' => $converted_name] );
 
             $this->video->update([
                 'converted_at' => Carbon::now(),
@@ -355,7 +371,7 @@ class TranscodingController extends Controller
                 ->first();
 
             $target_format = $ffprobe
-                ->streams(Storage::disk('converted')->path($this->getTargetFile()))
+                ->streams(Storage::disk('converted')->path($this->getTargetFileName()))
                 ->videos()
                 ->first();
 
@@ -368,15 +384,15 @@ class TranscodingController extends Controller
                     'mediakey' => $this->video->mediakey,
                     'medium' => [
                         'label' => $this->video->target['label'],
-                        'url' => route('getFile', $this->getTargetFile()),
-                        'checksum' => md5_file(Storage::disk('converted')->path($this->getTargetFile())),
+                        'url' => route('getFile', $this->getTargetFileName()),
+                        'checksum' => md5_file(Storage::disk('converted')->path($this->getTargetFileName())),
                         'default' => $this->video->target['default'] ?? false
                     ],
                     'properties' => [
                         'source_width' => $source_format->get('width'),
                         'source_height' => $source_format->get('height'),
                         'duration' => round($target_format->get('duration'), 0),
-                        'filesize' => filesize(Storage::disk('converted')->path($this->getTargetFile())),
+                        'filesize' => filesize(Storage::disk('converted')->path($this->getTargetFileName())),
                         'width' => $target_format->get('width'),
                         'height' => $target_format->get('height'),
                         'orientation' => $orientation,
@@ -504,7 +520,7 @@ class TranscodingController extends Controller
             $profile_additional_parameters[] = FFMpeg\Coordinate\TimeCode::fromSeconds($payload['target']['duration']);
         }
         if ($this->getHLS()) {
-            $filepath_ts = Storage::disk('converted')->path(substr($this->getTargetFile(), 0, -5) . '_%03d.ts');
+            $filepath_ts = Storage::disk('converted')->path(substr($this->getTargetFileName(), 0, -5) . '_%03d.ts');
 
             $profile_additional_parameters[] = '-hls_time';
             $profile_additional_parameters[] = '4';
@@ -516,7 +532,7 @@ class TranscodingController extends Controller
         return $profile_additional_parameters;
     }
 
-    protected function getTargetFile()
+    protected function getTargetFileName()
     {
         $target = $this->video->target;
         $separator = '_';

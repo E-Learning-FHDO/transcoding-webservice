@@ -55,7 +55,7 @@ $ cd transcoding-webservice
 
 - Copy the sample environment configuration file:
 ```
-$ cp env.example .env
+$ cp .env.example .env
 ```
 Edit .env with your favorite text editor:
 - Set APP_URL to your webserver URL.

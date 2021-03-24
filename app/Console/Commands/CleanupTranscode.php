@@ -8,7 +8,7 @@ use App\Models\Download;
 use App\Models\Video;
 use GuzzleHttp\RequestOptions;
 use GuzzleHttp\Client;
-use App\User;
+use App\Models\User;
 
 class CleanupTranscode extends Command
 {

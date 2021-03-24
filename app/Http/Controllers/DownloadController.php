@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Download;
-use App\User;
+use App\Models\User;
 
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;

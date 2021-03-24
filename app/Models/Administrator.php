@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Admin\Models;
+namespace App\Models;
 
 use Encore\Admin\Auth\Database\HasPermissions;
 use Encore\Admin\Traits\AdminBuilder;

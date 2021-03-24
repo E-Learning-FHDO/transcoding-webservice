@@ -5,7 +5,7 @@ namespace App\Jobs;
 use App\Models\Download;
 use App\Models\DownloadJob;
 use App\Models\Video;
-use App\User;
+use App\Models\User;
 use GuzzleHttp\RequestOptions;
 use Illuminate\Bus\Queueable;
 use Illuminate\Queue\Jobs\Job;
@@ -35,13 +35,13 @@ class DownloadFileJob implements ShouldQueue
     {
         Log::info("Entering " . __METHOD__);
         $payload = $this->download->payload;
-
+	$start = now();
         $path = $payload['mediakey'];
 
 
         $api_token = User::where('id', '=', $this->download->user_id)->pluck('api_token')->first();
 
-        Log::info("Starting download of mediakey" . $payload['mediakey']);
+        Log::info("Starting download of mediakey " . $payload['mediakey']);
 
         if ($this->download->processing !== Download::PROCESSING) {
             try {
@@ -66,7 +66,8 @@ class DownloadFileJob implements ShouldQueue
             $this->delete();
             return;
         }
-
+        $time = $start->diffInSeconds(now());
+        Log::debug("Download in " . __METHOD__ . " took $time seconds" );
         Log::info("Finished download of " . $payload['mediakey']);
 
         if (isset($payload['thumbnail'])) {

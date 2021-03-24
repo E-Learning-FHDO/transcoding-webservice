@@ -18,7 +18,7 @@ class Version extends Command
      *
      * @var string
      */
-    protected $description = 'Command description';
+    protected $description = 'Update app version';
 
     /**
      * Create a new command instance.
