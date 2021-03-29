@@ -16,6 +16,7 @@ use Encore\Admin\Show;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Carbon\Carbon;
 
 class DownloadQueueController extends Controller
 {
@@ -124,8 +125,11 @@ class DownloadQueueController extends Controller
         });
 
         $grid->processed('Processed')->using(['0' => 'No', '1' => 'Yes', '2' => 'Processing']);
-        $grid->created_at('Created at');
-        //$grid->updated_at('Updated at');
+
+        $grid->column('created_at', 'Created at')->display(function($created_at) {
+		if ($created_at)
+			return Carbon::parse($created_at)->format(config('app.timestamp_display_format'));
+	});
 
         return $grid;
     }

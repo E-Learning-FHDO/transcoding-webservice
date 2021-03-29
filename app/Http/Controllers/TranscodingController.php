@@ -75,6 +75,24 @@ class TranscodingController extends Controller
 	Log::debug("Exiting " . __METHOD__);
     }
 
+    public function updateProgress($percentage)
+    {
+        Log::debug("Entering " . __METHOD__);
+        try {
+            Cache::lock('target-' . $this->getTargetFileName())->get(function () use ($percentage) {
+                    $this->video->update([
+                        'percentage' => $percentage,
+                    ]);
+            });
+
+        }
+        catch(Throwable $exception)
+        {
+                Log::debug("Failed to update progress of " . $this->getTargetFileName() . ":" . $exception->getMessage());
+        }
+        Log::debug("Exiting " . __METHOD__);
+    }
+
     public function transcode()
     {
         Log::debug("Entering " . __METHOD__);
@@ -123,13 +141,11 @@ class TranscodingController extends Controller
 
             $video = $this->applyFilters($video);
 
-            $h264->on('progress', function ($video, $format, $percentage, $remaining, $rate) use ($pid, $converted_name) {
-		if ($percentage !== 0 && $remaining !== 0 && $rate !== 0) {
-                    Log::info("Host: $this->worker, PID: $pid, $percentage% of $converted_name transcoded, $remaining sec remaining, rate: $rate fps");
+            $h264->on('progress', function ($video, $format, $percentage) use ($pid, $converted_name) {
+		        if ($percentage !== 0) {
+                    Log::info("Host: $this->worker, PID: $pid, $percentage% of $converted_name transcoded");
                     $this->progress = (int) $percentage;
-                    $this->video->update([
-                        'percentage' => $this->progress,
-                    ]);
+                    $this->updateProgress($percentage);
                 }
             });
 
@@ -189,12 +205,9 @@ class TranscodingController extends Controller
 
             $guzzle = new Client();
 
-            $api_token = $this->user->api_token;
-            $url = $this->user->url . self::TRANSCODERWEBSERVICE_CALLBACK;
-
-            $response = $guzzle->post($url, [
+            $response = $guzzle->post($this->user->url . self::TRANSCODERWEBSERVICE_CALLBACK, [
                 RequestOptions::JSON => [
-                    'api_token' => $api_token,
+                    'api_token' => $this->user->api_token,
                     'mediakey' => $this->video->mediakey,
                     'thumbnail' => [
                         'url' => route('getFile', $converted_name)
@@ -219,7 +232,7 @@ class TranscodingController extends Controller
     {
         Log::debug("Entering " . __METHOD__);
 
-	$start = now();
+	    $start = now();
         $payload = $this->video->target;
         $spritemap = $payload['spritemap'];
 
@@ -268,12 +281,9 @@ class TranscodingController extends Controller
 
             $guzzle = new Client();
 
-            $api_token = $this->user->api_token;
-            $url = $this->user->url . self::TRANSCODERWEBSERVICE_CALLBACK;
-
-            $response = $guzzle->post($url, [
+            $response = $guzzle->post($this->user->url . self::TRANSCODERWEBSERVICE_CALLBACK, [
                 RequestOptions::JSON => [
-                    'api_token' => $api_token,
+                    'api_token' => $this->user->api_token,
                     'mediakey' => $this->video->mediakey,
                     'spritemap' => [
                         'count' => $spritemap['count'],

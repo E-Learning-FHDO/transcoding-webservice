@@ -24,6 +24,7 @@
         "laravel/ui": "^2.0",
         "pda/pheanstalk": "^4.0",
         "php-ffmpeg/php-ffmpeg": "^0.16",
+        "pragmarx/version": "^1.2",
         "spatie/laravel-directory-cleanup": "^1.5"
     },
     "require-dev": {

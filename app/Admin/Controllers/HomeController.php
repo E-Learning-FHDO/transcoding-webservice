@@ -14,22 +14,22 @@ class HomeController extends Controller
     {
         return $content
             ->title('Dashboard')
-            ->description('Description...')
-            ->row(Dashboard::title())
+            ->description(' ')
+            ->row('')
             ->row(function (Row $row) {
 
                 $row->column(4, function (Column $column) {
                     $column->append(TranscodingDashboard::environment());
                 });
-
+/*
                 $row->column(4, function (Column $column) {
                     $column->append(TranscodingDashboard::extensions());
-                });
+                });*/
 
                 $row->column(4, function (Column $column) {
                     $column->append(TranscodingDashboard::dependencies());
                 });
-                
+
                 /* $row->column(4, function (Column $column) {
                     $column->append(TranscodingDashboard::workers());
                 });*/

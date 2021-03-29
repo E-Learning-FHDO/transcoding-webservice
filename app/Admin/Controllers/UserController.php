@@ -11,6 +11,7 @@ use Encore\Admin\Grid;
 use Encore\Admin\Show;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Carbon\Carbon;
 
 class UserController extends AdminController
 {
@@ -37,8 +38,15 @@ class UserController extends AdminController
         //$grid->column('username', trans('admin.username'));
         $grid->column('name', trans('admin.name'));
         $grid->column('roles', trans('admin.roles'))->pluck('name')->label();
-        $grid->column('created_at', trans('admin.created_at'));
-        $grid->column('updated_at', trans('admin.updated_at'));
+        $grid->column('created_at', 'Created at')->display(function($created_at) {
+                if ($created_at)
+                        return Carbon::parse($created_at)->format(config('app.timestamp_display_format'));
+        });
+
+        $grid->column('updated_at', 'Updated at')->display(function($updated_at) {
+                if ($updated_at)
+                        return Carbon::parse($updated_at)->format(config('app.timestamp_display_format'));
+        });
 
         $grid->actions(function (Grid\Displayers\Actions $actions) {
             if ($actions->getKey() == 1) {

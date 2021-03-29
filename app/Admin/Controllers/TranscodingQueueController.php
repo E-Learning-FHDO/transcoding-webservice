@@ -16,6 +16,7 @@ use Encore\Admin\Show;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Carbon\Carbon;
 
 class TranscodingQueueController extends Controller
 {
@@ -92,7 +93,8 @@ class TranscodingQueueController extends Controller
         VideoController::deleteById($id);
         return $this->form()->destroy($id);
     }
-        /**
+
+    /**
      * Make a grid builder.
      *
      * @return Grid
@@ -101,8 +103,7 @@ class TranscodingQueueController extends Controller
     {
         $grid = new Grid(new Video);
 
-        if(!Admin::user()->isAdministrator())
-        {
+        if (!Admin::user()->isAdministrator()) {
             $grid->model()->where('user_id', '=', Admin::user()->id);
         }
 
@@ -112,7 +113,7 @@ class TranscodingQueueController extends Controller
             $actions->disableEdit();
         });
 
-        $grid->filter(function($filter){
+        $grid->filter(function ($filter) {
 
             $filter->disableIdFilter();
             $filter->equal('mediakey', 'mediakey');
@@ -123,22 +124,54 @@ class TranscodingQueueController extends Controller
 
 
         $grid->id('ID')->sortable();
-        $grid->user()->name()->display(function ($name){
+        $grid->user()->name()->display(function ($name) {
             return "<a href='users/$this->id'>$name</a>";
         });
         $grid->mediakey('Mediakey');
         $grid->title('Title');
-        $grid->file('File')->display(function ($file){
+        $grid->file('File')->display(function ($file) {
             return "<a href='transcodingqueue/$this->id'>$file</a>";
         });
 
-        $grid->processed('Processed')->using(['0' => 'No', '1' => 'Yes', '2' => 'Processing']);
+        $grid->column('processed', __('Processed'))
+            ->using(Video::$status)
+            ->label([
+                '0' => 'default',
+                '1' => 'success',
+                '2' => 'warning',
+                '3' => 'error',
+            ]);
+
         $grid->percentage('Percentage');
         $grid->worker('Worker');
-        $grid->created_at('Created at');
-        $grid->converted_at('Converted at');
-        $grid->failed_at('Failed at');
-        $grid->downloaded_at('Downloaded at');
+        $grid->column('created_at', 'Created at')->display(function ($created_at) {
+            if ($created_at) {
+                return Carbon::parse($created_at)->format(config('app.timestamp_display_format'));
+            }
+            return '';
+        });
+
+        $grid->column('converted_at', 'Converted at')->display(function ($converted_at) {
+            if ($converted_at) {
+                return Carbon::parse($converted_at)->format(config('app.timestamp_display_format'));
+            }
+            return '';
+        });
+
+        $grid->column('failed_at', 'Failed at')->display(function ($failed_at) {
+            if ($failed_at) {
+                return Carbon::parse($failed_at)->format(config('app.timestamp_display_format'));
+            }
+            return '';
+        });
+
+        $grid->column('downloaded_at', 'Downloaded at')->display(function ($downloaded_at) {
+            if ($downloaded_at) {
+                return Carbon::parse($downloaded_at)->format(config('app.timestamp_display_format'));
+            }
+            return '';
+        });
+
         return $grid;
     }
 
@@ -176,7 +209,7 @@ class TranscodingQueueController extends Controller
         $form = new Form(new Video);
 
         //$form->display('ID');
-        $form->text('file','File');
+        $form->text('file', 'File');
 
         return $form;
     }

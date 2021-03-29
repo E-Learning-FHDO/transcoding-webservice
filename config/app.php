@@ -13,7 +13,7 @@ return [
     |
     */
 
-    'name' => env('APP_NAME', 'Laravel'),
+    'name' => env('APP_NAME', 'Transcoding Webservice'),
 
     /*
     |--------------------------------------------------------------------------
@@ -165,7 +165,7 @@ return [
         /*
          * Package Service Providers...
          */
-
+	PragmaRX\Version\Package\ServiceProvider::class,
         /*
          * Application Service Providers...
          */
@@ -227,4 +227,5 @@ return [
         'View' => Illuminate\Support\Facades\View::class,
     ],
 
+    'timestamp_display_format' => 'Y-m-d H:i:s',
 ];

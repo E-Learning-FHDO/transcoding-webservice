@@ -4,6 +4,7 @@ namespace App\Admin\Controllers;
 
 use Encore\Admin\Admin;
 use Illuminate\Support\Arr;
+use PragmaRX\Version\Package\Version;
 
 class TranscodingDashboard
 {
@@ -22,8 +23,9 @@ class TranscodingDashboard
     {
         $connection = config('database.default');
         $driver = config("database.connections.{$connection}.driver");
-        
+
         $envs = [
+            ['name' => 'Transcoding Webservice version',       'value' => (new Version())->format('compact')],
             ['name' => 'PHP version',       'value' => 'PHP/'.PHP_VERSION],
             ['name' => 'Laravel version',   'value' => app()->version()],
             ['name' => 'Laravel admin version',        'value' => Admin::VERSION],
@@ -45,7 +47,7 @@ class TranscodingDashboard
 
         return view('admin::dashboard.environment', compact('envs'));
     }
-    
+
     /**
      * @return \Illuminate\Contracts\View\Factory|\Illuminate\View\View
      */

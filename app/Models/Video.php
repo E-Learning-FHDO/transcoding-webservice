@@ -20,6 +20,13 @@ class Video extends Model
     public const PROCESSING = 2;
     public const FAILED = 3;
 
+    public static $status = [
+        '0' => 'unprocessed',
+        '1' => 'processed',
+        '2' => 'processing',
+        '3' => 'failed',
+    ];
+
     public function user()
     {
         return $this->belongsTo(User::class, 'user_id', 'id');

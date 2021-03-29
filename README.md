@@ -24,8 +24,7 @@ php-fpm, php-mysql, php-xml, php-zip, php-curl, php-mbstring, php-intl as well a
 
 
 ### Setup Instructions
-This instruction should fit for most Debian-based Linux distributions.
-The following commands should be executed with root privileges.
+This instruction should fit for most Debian-based Linux distributions. The following commands should be executed with root privileges.
 
 #### Webservice setup
 - Install required packages on the webservice host:
@@ -136,10 +135,11 @@ server {
 
 ```
 ##### Configure cron job for task scheduling
-Create file /etc/cron.d/transcoding-webservice with following content, adjust the path according your needs
+Create a file /etc/cron.d/transcoding-webservice with following content, adjust the path according your needs
 ```
 * * * * * www-data cd /opt/transcoding-webservice && php artisan schedule:run >> /dev/null 2>&1
 ```
+
 #### Worker setup
 The worker should be able to access the project root using the same shared storage, which the webservice has access to. 
 Therefore, it should be connected e.g. via NFS-mountpoint. 
@@ -153,6 +153,7 @@ php7.3-json php7.3-gd mariadb-client
 ```
 
 ##### Running queue worker
+Queue worker process can be started in the foreground with the following command 
 ```
 $ sudo -u www-data php artisan queue:work --tries=3 --queue=download,video --timeout=84600 --memory=1024
 ```
@@ -173,6 +174,10 @@ ExecStart=/usr/bin/php /opt/transcoding-webservice/artisan queue:work --daemon -
 [Install]
 WantedBy=multi-user.target
 ```
+### Usage
+#### Login
+- Open URL that was specified in APP_URL variable of the .env file in your browser, use username admin@example.org and password admin to login.
+- change the default credentials after first login
 
 #### Troubleshooting
 Enable full FFmpeg and FFprobe output in storage/log/laravel.log for debugging purposes: 

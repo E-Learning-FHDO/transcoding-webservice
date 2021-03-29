@@ -20,15 +20,6 @@ class UsersTableSeeder extends Seeder {
                 'url'  => '',
                 'profile_id' => 1
             ),
-            array(
-                'id' => 2,
-                'name'      => 'user',
-                'email'      => 'user@example.org',
-                'password'   => Hash::make('user'),
-		        'api_token'  => Str::random(32),
-                'url'  => '',
-                'profile_id' => 1
-            )
         );
 
         DB::table('users')->insert( $users );

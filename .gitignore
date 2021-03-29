@@ -1,5 +1,6 @@
 /node_modules
 /public/storage
+/public/uploads
 /storage/*.key
 /storage/app/public/uploaded/*
 /storage/app/public/converted/*
