@@ -146,28 +146,28 @@ class TranscodingQueueController extends Controller
         $grid->worker('Worker');
         $grid->column('created_at', 'Created at')->display(function ($created_at) {
             if ($created_at) {
-                return Carbon::parse($created_at)->format(config('app.timestamp_display_format'));
+                return Carbon::parse($created_at)->timezone(config('app.timezone'))->format(config('app.timestamp_display_format'));
             }
             return '';
         });
 
         $grid->column('converted_at', 'Converted at')->display(function ($converted_at) {
             if ($converted_at) {
-                return Carbon::parse($converted_at)->format(config('app.timestamp_display_format'));
+                return Carbon::parse($converted_at)->timezone(config('app.timezone'))->format(config('app.timestamp_display_format'));
             }
             return '';
         });
 
         $grid->column('failed_at', 'Failed at')->display(function ($failed_at) {
             if ($failed_at) {
-                return Carbon::parse($failed_at)->format(config('app.timestamp_display_format'));
+                return Carbon::parse($failed_at)->timezone(config('app.timezone'))->format(config('app.timestamp_display_format'));
             }
             return '';
         });
 
         $grid->column('downloaded_at', 'Downloaded at')->display(function ($downloaded_at) {
             if ($downloaded_at) {
-                return Carbon::parse($downloaded_at)->format(config('app.timestamp_display_format'));
+                return Carbon::parse($downloaded_at)->timezone(config('app.timezone'))->format(config('app.timestamp_display_format'));
             }
             return '';
         });

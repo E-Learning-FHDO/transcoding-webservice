@@ -138,8 +138,10 @@ class DownloadQueueController extends Controller
 
 
         $grid->column('created_at', 'Created at')->display(function($created_at) {
-		if ($created_at)
-			return Carbon::parse($created_at)->format(config('app.timestamp_display_format'));
+		if ($created_at) {
+			return Carbon::parse($created_at)->timezone(config('app.timezone'))->format(config('app.timestamp_display_format'));
+		}
+		return '';
 	});
 
         return $grid;
