@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Carbon\Carbon;
+use App\Models\Video;
 
 class DownloadQueueController extends Controller
 {
@@ -124,7 +125,17 @@ class DownloadQueueController extends Controller
             return '<a target="_blank" href="' . $payload['source']['url'] . '">'. $payload['source']['url'] .'</a>';
         });
 
-        $grid->processed('Processed')->using(['0' => 'No', '1' => 'Yes', '2' => 'Processing']);
+//        $grid->processed('Processed')->using(['0' => 'No', '1' => 'Yes', '2' => 'Processing']);
+
+        $grid->column('processed', __('Processed'))
+            ->using(Video::$status)
+            ->label([
+                '0' => 'default',
+                '1' => 'success',
+                '2' => 'warning',
+                '3' => 'danger',
+            ]);
+
 
         $grid->column('created_at', 'Created at')->display(function($created_at) {
 		if ($created_at)

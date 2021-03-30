@@ -139,7 +139,7 @@ class TranscodingQueueController extends Controller
                 '0' => 'default',
                 '1' => 'success',
                 '2' => 'warning',
-                '3' => 'error',
+                '3' => 'danger',
             ]);
 
         $grid->percentage('Percentage');
