@@ -581,7 +581,7 @@ class TranscodingController extends Controller
 
             case 'h264_nvenc':
             {
-                $scale_nvenc = 'hwupload,scale_npp=w='.$w.':h='.$h.':force_original_aspect_ratio=decrease:force_divisible_by=2:interp_algo=super';
+                $scale_nvenc = 'hwupload,scale_npp=w='.$w.':h='.$h.':force_original_aspect_ratio=decrease:force_divisible_by=4:interp_algo=super';
                 //$scale_nvenc = 'scale_npp=w=\'if(gt(a\,'.$w.'/'.$h.')\,'.$w.'\,oh*a)\':h=\'if(gt(a\,'.$w.'/'.$h.')\,ow/a\,'.$h.')\':interp_algo=super';
                 $video->filters()->custom($scale_nvenc)->synchronize();
                 return $video;
