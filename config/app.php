@@ -161,11 +161,12 @@ return [
         Illuminate\Translation\TranslationServiceProvider::class,
         Illuminate\Validation\ValidationServiceProvider::class,
         Illuminate\View\ViewServiceProvider::class,
+        ProtoneMedia\LaravelFFMpeg\Support\ServiceProvider::class,
 
         /*
          * Package Service Providers...
          */
-	PragmaRX\Version\Package\ServiceProvider::class,
+	    PragmaRX\Version\Package\ServiceProvider::class,
         /*
          * Application Service Providers...
          */
@@ -225,7 +226,9 @@ return [
         'URL' => Illuminate\Support\Facades\URL::class,
         'Validator' => Illuminate\Support\Facades\Validator::class,
         'View' => Illuminate\Support\Facades\View::class,
+        'FFMpeg' => ProtoneMedia\LaravelFFMpeg\Support\FFMpeg::class
     ],
 
     'timestamp_display_format' => 'Y-m-d H:i:s',
+    'callback_enabled' => env('CALLBACK_ENABLED', true),
 ];

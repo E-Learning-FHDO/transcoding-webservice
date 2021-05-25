@@ -35,7 +35,8 @@ class AppServiceProvider extends ServiceProvider
             // $event->connectionName
             // $event->job
             // $event->job->payload()
-            Log::debug("Host: " . gethostname() . ' ' .  print_r($event->job->payload(), true));
+            // Log::debug("Host: " . gethostname() . ' ' .  print_r($event->job->payload(), true));
         });
+
     }
 }

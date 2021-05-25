@@ -4,15 +4,10 @@ namespace App\Models;
 
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
+use \Repat\LaravelJobs\Job;
 
 class Download extends Model
 {
-    public const UNPROCESSED = 0;
-    public const PROCESSED = 1;
-    public const PROCESSING = 2;
-    public const FAILED = 3;
-
-
     protected $fillable = ['user_id', 'mediakey', 'payload', 'processed'];
 
     protected $guarded = [];
@@ -26,8 +21,13 @@ class Download extends Model
         return $this->belongsTo(User::class, 'user_id', 'id');
     }
 
-    public function videos()
+    public function media()
     {
-        return $this->hasMany(Video::class, 'download_id', 'id');
+        return $this->hasMany(Media::class, 'download_id', 'id');
+    }
+
+    public function jobs(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(Job::class, 'download_jobs', 'download_id', 'job_id');
     }
 }

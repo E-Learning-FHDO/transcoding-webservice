@@ -18,7 +18,8 @@ class UsersTableSeeder extends Seeder {
                 'password'   => Hash::make('admin'),
 		        'api_token'   => Str::random(32),
                 'url'  => '',
-                'profile_id' => 1
+                'profile_id' => 1,
+                'active' => true
             ),
         );
 

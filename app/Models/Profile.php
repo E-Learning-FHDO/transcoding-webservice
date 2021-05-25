@@ -20,4 +20,9 @@ class Profile extends Model
     {
         return $this->hasMany(ProfileAdditionalParameter::class);
     }
+
+    public function workers(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(Worker::class, 'profile_workers', 'profile_id', 'worker_id');
+    }
 }

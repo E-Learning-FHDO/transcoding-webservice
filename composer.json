@@ -13,27 +13,30 @@
         "ext-json": "*",
         "ext-zip": "*",
         "encore/laravel-admin": "^1.8.11",
-        "fideloper/proxy": "^4.0",
-        "guzzlehttp/guzzle": "^6.5",
-        "jxlwqq/material-ui": "^1.0",
+        "fideloper/proxy": "^4.4",
+        "fruitcake/laravel-cors": "^2.0",
+        "guzzlehttp/guzzle": "^7.0.1",
         "laravel-admin-ext/helpers": "^1.2",
         "laravel-admin-ext/log-viewer": "^1.0",
         "laravel-admin-ext/scheduling": "^1.1",
-        "laravel/framework": "^7.5",
-        "laravel/tinker": "^2.0",
-        "laravel/ui": "^2.0",
+        "laravel/framework": "^8.41",
+        "laravel/tinker": "^2.5",
+        "laravel/ui": "^3.2",
+        "league/flysystem-aws-s3-v3": "1.0.29",
+        "pbmedia/laravel-ffmpeg": "^7.5",
         "pda/pheanstalk": "^4.0",
-        "php-ffmpeg/php-ffmpeg": "^0.16",
         "pragmarx/version": "^1.2",
-        "spatie/laravel-directory-cleanup": "^1.5"
+        "repat/laravel-job-models": "^0.5.1",
+        "spatie/laravel-directory-cleanup": "^1.5",
+        "stechstudio/laravel-zipstream": "^4.1"
     },
     "require-dev": {
-        "roave/security-advisories": "dev-master"
+        "roave/security-advisories": "dev-latest"
         ,
-        "facade/ignition": "^2.0",
+        "facade/ignition": "^2.5",
         "fakerphp/faker": "^1.9.1",
-        "mockery/mockery": "^1.0",
-        "nunomaduro/collision": "^4.1",
+        "mockery/mockery": "^1.4.2",
+        "nunomaduro/collision": "^5.0",
         "phpunit/phpunit": "^9.3.3"
     },
     "config": {

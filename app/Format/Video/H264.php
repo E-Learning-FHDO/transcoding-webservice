@@ -65,7 +65,7 @@ class H264 extends \FFMpeg\Format\Video\DefaultVideo implements ProgressableInte
      */
     public function getAvailableVideoCodecs()
     {
-        return array('libx264', 'h264_nvenc', 'h264_vaapi');
+        return array('libx264', 'h264_nvenc', 'h264_vaapi', 'h264_omx');
     }
 
     /**

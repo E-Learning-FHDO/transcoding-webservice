@@ -6,22 +6,25 @@ use Alchemy\BinaryDriver\Listeners\DebugListener;
 use App\Format\Video\H264;
 use App\Models\Download;
 use App\Models\Profile;
-use App\Models\Video;
+use App\Models\Media;
+use App\Models\Status;
 use App\Models\Worker;
 use App\Models\User;
 use Carbon\Carbon;
 use Exception;
-use FFMpeg\Filters\Frame\CustomFrameFilter;
+use FFMpeg\Coordinate;
 use GuzzleHttp\Client;
 use GuzzleHttp\RequestOptions;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
+use PragmaRX\Version\Package\Version;
+use ProtoneMedia\LaravelFFMpeg\Exporters\EncodingException;
+use ProtoneMedia\LaravelFFMpeg\Exporters\NoFormatException;
+use ProtoneMedia\LaravelFFMpeg\Filesystem\MediaCollection;
+use ProtoneMedia\LaravelFFMpeg\Support\FFMpeg;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use FFMpeg;
 use FFMpeg\Coordinate\Dimension;
 use ZipArchive;
 use Throwable;
@@ -32,7 +35,7 @@ class TranscodingController extends Controller
     public const SPRITEMAP_DEFAULT_WIDTH = 142;
     public const SPRITEMAP_DEFAULT_HEIGHT = 80;
 
-    public $video;
+    public $media;
     private $dimension;
     private $preview;
     private $hls;
@@ -43,17 +46,17 @@ class TranscodingController extends Controller
     private $pid;
     private $worker;
 
-    public function __construct(Video $video, Dimension $dimension, $attempts)
+    public function __construct(Media $media, Dimension $dimension, $attempts)
     {
-        $this->video = $video;
+        $this->media = $media;
         $this->dimension = $dimension;
         $this->attempts = $attempts;
-        $this->user = User::find($this->video->user_id);
+        $this->user = User::find($this->media->user_id);
         $this->profile = $this->user->profile;
         $this->worker = gethostname();
     }
 
-    public function updateWorkerStatus()
+    public function updateWorkerStatus(): void
     {
         Log::debug("Entering " . __METHOD__);
         try {
@@ -61,64 +64,59 @@ class TranscodingController extends Controller
                 $date = Carbon::now();
                 Worker::updateOrCreate([
                     'host' => $this->worker
-                ],[
+                ], [
                     'last_seen_at' => $date,
                     'description' => gethostbyname($this->worker)
                 ]);
             });
 
-        }
-        catch(Throwable $exception)
-        {
-		Log::debug("Failed to update or create worker $this->worker: " . $exception->getMessage());
-        }
-	Log::debug("Exiting " . __METHOD__);
-    }
-
-    public function updateProgress($percentage)
-    {
-        Log::debug("Entering " . __METHOD__);
-        try {
-            Cache::lock('target-' . $this->getTargetFileName())->get(function () use ($percentage) {
-                    $this->video->update([
-                        'percentage' => $percentage,
-                    ]);
-            });
-
-        }
-        catch(Throwable $exception)
-        {
-                Log::debug("Failed to update progress of " . $this->getTargetFileName() . ":" . $exception->getMessage());
+        } catch (Throwable $exception) {
+            Log::debug("Failed to update or create worker $this->worker: " . $exception->getMessage());
         }
         Log::debug("Exiting " . __METHOD__);
     }
 
-    public function transcode()
+    public function updateProgress($percentage): void
     {
         Log::debug("Entering " . __METHOD__);
-        $pid = $this->pid = getmypid();
+        try {
+            Cache::lock('target-' . $this->getTargetFileName())->get(function () use ($percentage) {
+                $this->media->update([
+                    'percentage' => $percentage,
+                ]);
+            });
 
-	$start = now();
+        } catch (Throwable $exception) {
+            Log::debug("Failed to update progress of " . $this->getTargetFileName() . ":" . $exception->getMessage());
+        }
+        Log::debug("Exiting " . __METHOD__);
+    }
+
+    public function transcode(): void
+    {
+        Log::debug("Entering " . __METHOD__);
+        $this->pid = getmypid();
+
+        $start = now();
         $this->updateWorkerStatus();
-        $this->video->update([
-            'processed' => Video::PROCESSING,
+        $this->media->update([
+            'processed' => Status::PROCESSING,
             'file' => $this->getTargetFileName(),
             'worker' => $this->worker
         ]);
 
-        $this->prepare();
+        $target = $this->media->target;
 
-        $target = $this->video->target;
+        $convertedFileName = $this->getTargetFileName();
+        Log::info("Clip: $convertedFileName, encoder: " . $this->profile->encoder . ", attempt: $this->attempts");
 
-        $converted_name = $this->getTargetFileName();
-        Log::info("Clip: $converted_name, encoder: " . $this->profile->encoder . ", attempt: $this->attempts");
-        $fallback_profile = Profile::find($this->user->profile->fallback_id);
-        if ($this->attempts > 1  && !empty($fallback_profile)) {
-            Log::info("Failed to encode $converted_name with " . $this->profile->encoder . " codec");
-            $this->profile = $fallback_profile;
+        $fallbackProfile = Profile::find($this->user->profile->fallback_id);
+        if ($this->attempts > 1 && !empty($fallbackProfile)) {
+            Log::info("Failed to encode $convertedFileName with " . $this->profile->encoder . " codec");
+            $this->profile = $fallbackProfile;
         }
-        Log::info("Trying to encode clip $converted_name with " . $this->profile->encoder . " codec ..");
-        Log::debug("Target:  ". print_r($this->video->target, true));
+        Log::info("Trying to encode clip $convertedFileName with " . $this->profile->encoder . " codec ..");
+        Log::debug("Target:  " . print_r($this->media->target, true));
 
         $h264 = (new H264('aac', $this->profile->encoder))
             ->setKiloBitrate($target['vbr'])
@@ -126,105 +124,75 @@ class TranscodingController extends Controller
             ->setAdditionalParameters($this->applyAdditionalParameters())
             ->setInitialParameters($this->applyInitialParameters());
 
-        $ffmpeg = FFMpeg\FFMpeg::create(self::getFFmpegConfig());
-        if(self::getFFmpegConfig()['ffmpeg.debug']) {
-            $ffmpeg->getFFMpegDriver()->listen(new DebugListener());
-                $ffmpeg->getFFMpegDriver()->on('debug', function ($message) {
-                    Log::info('FFmpeg: ' . $message);
-                });
+        if ($this->isHLS()) {
+            $this->prepareHLSDirectory();
+            $this->transcodeHLSVideo($h264, $convertedFileName);
+
+        } else {
+            $this->transcodeVideo($h264, $convertedFileName);
         }
 
-        $videofile = Storage::disk('uploaded')->path($this->video->path);
-        if (file_exists($videofile) && is_readable($videofile) && is_writable($videofile)) {
+        $time = $start->diffInSeconds(now());
+        Log::debug("Conversion in " . __METHOD__ . " of " . $this->getTargetFileName() . " took $time seconds");
+        $this->media->update([
+            'converted_at' => Carbon::now(),
+            'processed' => Status::PROCESSED,
+            'percentage' => 100
+        ]);
 
-            $video = $ffmpeg->open(Storage::disk('uploaded')->path($this->video->path));
-
-            $video = $this->applyFilters($video);
-
-            $h264->on('progress', function ($video, $format, $percentage) use ($pid, $converted_name) {
-		        if ($percentage !== 0) {
-                    Log::info("Host: $this->worker, PID: $pid, $percentage% of $converted_name transcoded");
-                    $this->progress = (int) $percentage;
-                    $this->updateProgress($percentage);
-                }
-            });
-
-            Log::debug('Executing ' . print_r($video->getFinalCommand($h264, Storage::disk('converted')->path($this->getTargetFileName())), true));
-            $video->save($h264, Storage::disk('converted')->path($this->getTargetFileName()));
-            $time = $start->diffInSeconds(now());
-            Log::debug("Conversion in " . __METHOD__ . " of " . $this->getTargetFileName() . " took $time seconds");
-            $this->video->update([
-                'converted_at' => Carbon::now(),
-                'processed' => Video::PROCESSED,
-                'percentage' => 100
-            ]);
-        }
-
-        else {
-            Log::debug("File " . $videofile . ' is not readable, please check permissions of the storage folder');
-        }
-
-	    Log::debug("Exiting " . __METHOD__);
+        Log::debug("Exiting " . __METHOD__);
     }
 
-    public function createThumbnail()
+    public function createThumbnail(): void
     {
         Log::debug("Entering " . __METHOD__);
-
-	$start = now();
-        $payload = $this->video->target;
+        $start = now();
+        $payload = $this->media->target;
         $target = $payload['thumbnail_item'];
 
         $key = array_key_first($target);
-        $converted_name = $this->video->path . '_' . $payload['source']['created_at'] . '_' . $key . '.jpg';
+        $convertedFileName = $this->media->path . '_' . $payload['source']['created_at'] . '_' . $key . '.jpg';
 
-        $ffmpeg = FFMpeg\FFMpeg::create(self::getFFmpegConfig());
-        if(self::getFFmpegConfig()['ffmpeg.debug']) {
-            $ffmpeg->getFFMpegDriver()->listen(new DebugListener());
-            $ffmpeg->getFFMpegDriver()->on('debug', function ($message) {
-                Log::info(__METHOD__ . ' FFmpeg: ' . $message);
-            });
-        }
+        $ffmpeg = FFMpeg::fromDisk('uploaded')
+            ->open($this->media->path)
+            ->getFrameFromSeconds($target[$key]['second'])
+            ->export()
+            ->toDisk('converted')
+            ->save($convertedFileName)
+            ->cleanupTemporaryFiles();
 
-        $videofile = Storage::disk('uploaded')->path($this->video->path);
-        if (file_exists($videofile) && is_readable($videofile) && is_writable($videofile)) {
-            $ffmpeg->open($videofile)
-                ->frame(FFMpeg\Coordinate\TimeCode::fromSeconds($target[$key]['second']))
-                ->save(Storage::disk('converted')->path($converted_name));
+        $time = $start->diffInSeconds(now());
+        Log::debug("Conversion in " . __METHOD__ . " of " . $convertedFileName . " took $time seconds", ['name' => $convertedFileName]);
 
-            $time = $start->diffInSeconds(now());
-            Log::debug("Conversion in " . __METHOD__ . " of " . $converted_name ." took $time seconds", ['name' => $converted_name]);
+        $this->media->update([
+            'converted_at' => Carbon::now(),
+            'processed' => Status::PROCESSED,
+            'percentage' => 100,
+            'file' => $convertedFileName,
+            'worker' => $this->worker
+        ]);
 
-            $this->video->update([
-                'converted_at' => Carbon::now(),
-                'processed' => Video::PROCESSED,
-                'percentage' => 100,
-                'file' => $converted_name,
-                'worker' => $this->worker
-            ]);
+        if (config('app.callback_enabled')) {
+            $httpClient = new Client();
 
-            $guzzle = new Client();
-
-            $response = $guzzle->post($this->user->url . self::TRANSCODERWEBSERVICE_CALLBACK, [
+            $response = $httpClient->post($this->user->url . self::TRANSCODERWEBSERVICE_CALLBACK, [
                 RequestOptions::JSON => [
                     'api_token' => $this->user->api_token,
-                    'mediakey' => $this->video->mediakey,
+                    'mediakey' => $this->media->mediakey,
                     'thumbnail' => [
-                        'url' => route('getFile', $converted_name)
+                        'url' => route('getFile', $convertedFileName)
                     ]
                 ]
             ]);
 
             Log::debug(__METHOD__ . ': ' . $response->getReasonPhrase());
 
-            if ($this->downloadComplete() && $this->video->download()->get('processed')) {
-                $this->video->download()->update(['processed' => Download::PROCESSED]);
+            if ($this->isDownloadComplete() && $this->media->download()->get('processed')) {
+                $this->media->download()->update(['processed' => Status::PROCESSED]);
                 $this->executeFinalCallback();
             }
         }
-        else {
-            Log::debug("File " . $videofile . ' is not readable, please check permissions of the storage folder');
-        }
+
         Log::debug("Exiting " . __METHOD__);
     }
 
@@ -232,319 +200,271 @@ class TranscodingController extends Controller
     {
         Log::debug("Entering " . __METHOD__);
 
-	    $start = now();
-        $payload = $this->video->target;
+        $start = now();
+        $payload = $this->media->target;
         $spritemap = $payload['spritemap'];
 
-        $converted_name = $this->video->path . '_' . $payload['source']['created_at'] . '_sprites.jpg';
+        $convertedFileName = $this->media->path . '_' . $payload['source']['created_at'] . '_sprites.jpg';
 
-        $target_width = $spritemap['width'] ?? self::SPRITEMAP_DEFAULT_WIDTH;
-        $target_height = $spritemap['height'] ?? self::SPRITEMAP_DEFAULT_HEIGHT;
+        $targetWidth = $spritemap['width'] ?? self::SPRITEMAP_DEFAULT_WIDTH;
+        $targetHeight = $spritemap['height'] ?? self::SPRITEMAP_DEFAULT_HEIGHT;
 
-        $ffmpeg = FFMpeg\FFMpeg::create(self::getFFmpegConfig());
-        if(self::getFFmpegConfig()['ffmpeg.debug']) {
-            $ffmpeg->getFFMpegDriver()->listen(new DebugListener());
-            $ffmpeg->getFFMpegDriver()->on('debug', function ($message) {
-                Log::info('FFmpeg: ' . $message);
-            });
-        }
+        $duration = FFMpeg::fromDisk('uploaded')
+            ->open($this->media->path)
+            ->getDurationInSeconds();
 
-        $ffprobe = FFMpeg\FFProbe::create(self::getFFmpegConfig());
-        if(self::getFFmpegConfig()['ffprobe.debug']) {
-            $ffprobe->getFFProbeDriver()->listen(new DebugListener());
-            $ffprobe->getFFProbeDriver()->on('debug', function ($message) {
-                Log::info('FFprobe: ' . $message);
-            });
-        }
+        $fps = $spritemap['count'] / ceil($duration);
 
-        $videofile = Storage::disk('uploaded')->path($this->video->path);
-        if (file_exists($videofile) && is_readable($videofile) && is_writable($videofile)) {
-            $duration = $ffprobe->format($videofile)->get('duration');
-            $video = $ffmpeg->open(Storage::disk('uploaded')->path($this->video->path));
-            Log::debug("Spritemap count: " . $spritemap['count'] . ", duration: " . $duration);
-            $fps = $spritemap['count'] / ceil($duration);
+        $ffmpeg = FFMpeg::fromDisk('uploaded')
+            ->open($this->media->path)
+            ->getFrameFromSeconds(0)
+            ->addFilter('-vf', 'select=eq(pict_type\,PICT_TYPE_I),mpdecimate,scale=' . $targetWidth . ':' . $targetHeight . ',fps=' . $fps . ',tile=10x10:margin=2:padding=2')
+            ->export()
+            ->toDisk('converted')
+            ->save($convertedFileName)
+            ->cleanupTemporaryFiles();
 
-            $video->frame(FFMpeg\Coordinate\TimeCode::fromSeconds(0))
-                ->addFilter(new CustomFrameFilter('select=eq(pict_type\,PICT_TYPE_I),mpdecimate,scale=' . $target_width . ':' . $target_height . ',fps=' . $fps . ',tile=10x10:margin=2:padding=2'))
-                ->save(Storage::disk('converted')->path($converted_name));
+        Log::debug("Spritemap count: " . $spritemap['count'] . ", duration: " . $duration);
 
-            $time = $start->diffInSeconds(now());
-            Log::debug("Conversion in " . __METHOD__ . " of " . $converted_name ." took $time seconds", ['name' => $converted_name] );
+        $time = $start->diffInSeconds(now());
+        Log::debug("Conversion in " . __METHOD__ . " of " . $convertedFileName . " took $time seconds", ['name' => $convertedFileName]);
 
-            $this->video->update([
-                'converted_at' => Carbon::now(),
-                'processed' => Video::PROCESSED,
-                'percentage' => 100,
-                'file' => $converted_name,
-                'worker' => $this->worker
-            ]);
+        $this->media->update([
+            'converted_at' => Carbon::now(),
+            'processed' => Status::PROCESSED,
+            'percentage' => 100,
+            'file' => $convertedFileName,
+            'worker' => $this->worker
+        ]);
 
-            $guzzle = new Client();
+        if (config('app.callback_enabled')) {
+            $httpClient = new Client();
 
-            $response = $guzzle->post($this->user->url . self::TRANSCODERWEBSERVICE_CALLBACK, [
+            $response = $httpClient->post($this->user->url . self::TRANSCODERWEBSERVICE_CALLBACK, [
                 RequestOptions::JSON => [
                     'api_token' => $this->user->api_token,
-                    'mediakey' => $this->video->mediakey,
+                    'mediakey' => $this->media->mediakey,
                     'spritemap' => [
                         'count' => $spritemap['count'],
-                        'url' => route('getFile', $converted_name)
+                        'url' => route('getFile', $convertedFileName)
                     ]
                 ]
             ]);
 
             Log::debug(__METHOD__ . ': ' . $response->getReasonPhrase());
 
-            if ($this->downloadComplete() && $this->video->download()->get('processed')) {
-                $this->video->download()->update(['processed' => Download::PROCESSED]);
+            if ($this->isDownloadComplete() && $this->media->download()->get('processed')) {
+                $this->media->download()->update(['processed' => Status::PROCESSED]);
                 $this->executeFinalCallback();
             }
         }
-        else {
-            Log::debug("File " . $videofile . ' is not readable, please check permissions of the storage folder');
-        }
-	    Log::debug("Exiting " . __METHOD__);
+
+        Log::debug("Exiting " . __METHOD__);
     }
 
-    public function setPreview($preview = true)
+    public function setPreview($preview = true): void
     {
         $this->preview = $preview;
     }
 
-    public function getPreview()
+    public function isPreview()
     {
         return $this->preview;
     }
 
-    public function setHLS($hls = true)
+    public function setHLS($hls = true): void
     {
         $this->hls = $hls;
     }
 
-    public function getHLS()
+    public function isHLS()
     {
         return $this->hls;
     }
 
-    public static function getFFmpegConfig()
-    {
-        return array(
-            'ffmpeg.binaries' => config('php-ffmpeg.ffmpeg.binaries'),
-            'ffmpeg.threads' => config('php-ffmpeg.ffmpeg.threads'),
-            'ffprobe.binaries' => config('php-ffmpeg.ffprobe.binaries'),
-            'ffmpeg.debug' => config('php-ffmpeg.ffmpeg.debug'),
-            'ffprobe.debug' => config('php-ffmpeg.ffprobe.debug'),
-            'timeout' => config('php-ffmpeg.timeout'),
-        );
-    }
-
-    public function executeCallback()
+    public function executeCallback(): void
     {
         Log::debug("Entering " . __METHOD__);
-        $guzzle = new Client();
-        $api_token = $this->user->api_token;
+        $httpClient = new Client();
+        $apiToken = $this->user->api_token;
         $url = $this->user->url . self::TRANSCODERWEBSERVICE_CALLBACK;
 
-        if ($this->getHLS())
-        {
+        if ($this->isHLS()) {
             $archiveFile = $this->createHLSArchive();
 
             $requestOptions = array(
                 RequestOptions::JSON => [
-                    'api_token' => $api_token,
-                    'mediakey' => $this->video->mediakey,
+                    'api_token' => $apiToken,
+                    'mediakey' => $this->media->mediakey,
                     'medium' => [
-                        'label' => $this->video->target['label'],
+                        'label' => $this->media->target['label'],
                         'url' => route('getFile', $archiveFile),
                         'hls' => true,
-                        'vbr' => $this->video->target['vbr'],
-                        'abr' => $this->video->target['abr'],
-                        'size' => $this->video->target['size'],
-                        'extension' => $this->video->target['extension'],
-                        'created_at' => $this->video->target['created_at'],
-                        'default' => $this->video->target['default'] ?? false,
-                        'checksum' => md5_file(Storage::disk('converted')->path($archiveFile))
+                        'vbr' => $this->media->target['vbr'],
+                        'abr' => $this->media->target['abr'],
+                        'size' => $this->media->target['size'],
+                        'extension' => $this->media->target['extension'],
+                        'created_at' => $this->media->target['created_at'],
+                        'preview' => $this->isPreview() ?? false,
+                        'default' => $this->media->target['default'] ?? false
                     ]
                 ]);
-        }
-        else {
-            $ffprobe = FFMpeg\FFProbe::create();
-            if(self::getFFmpegConfig()['ffprobe.debug']) {
-                $ffprobe->getFFProbeDriver()->listen(new DebugListener());
-                $ffprobe->getFFProbeDriver()->on('debug', function ($message) {
-                    Log::info('FFprobe: ' . $message);
-                });
-            }
+        } else {
 
-            $source_format = $ffprobe
-                ->streams(Storage::disk('uploaded')->path($this->video->path))
-                ->videos()
-                ->first();
+            $sourceFormat = FFMpeg::fromDisk('uploaded')->open($this->media->path)->getVideoStream();
+            $targetFormat = FFMpeg::fromDisk('converted')->open($this->getTargetFileName())->getVideoStream();
 
-            $target_format = $ffprobe
-                ->streams(Storage::disk('converted')->path($this->getTargetFileName()))
-                ->videos()
-                ->first();
-
-            $tags = $target_format->get('tags');
-            $orientation = empty($tags['rotate']) ? 0 : (int) $tags['rotate'];
+            $tags = $targetFormat->get('tags');
+            $orientation = empty($tags['rotate']) ? 0 : (int)$tags['rotate'];
 
             $requestOptions = array(
                 RequestOptions::JSON => [
-                    'api_token' => $api_token,
-                    'mediakey' => $this->video->mediakey,
+                    'api_token' => $apiToken,
+                    'mediakey' => $this->media->mediakey,
                     'medium' => [
-                        'label' => $this->video->target['label'],
+                        'label' => $this->media->target['label'],
                         'url' => route('getFile', $this->getTargetFileName()),
-                        'checksum' => md5_file(Storage::disk('converted')->path($this->getTargetFileName())),
-                        'default' => $this->video->target['default'] ?? false
+                        'preview' => $this->isPreview() ?? false,
+                        'default' => $this->media->target['default'] ?? false
                     ],
                     'properties' => [
-                        'source_width' => $source_format->get('width'),
-                        'source_height' => $source_format->get('height'),
-                        'duration' => round($target_format->get('duration'), 0),
-                        'filesize' => filesize(Storage::disk('converted')->path($this->getTargetFileName())),
-                        'width' => $target_format->get('width'),
-                        'height' => $target_format->get('height'),
+                        'source_width' => $sourceFormat->get('width'),
+                        'source_height' => $sourceFormat->get('height'),
+                        'duration' => round($targetFormat->get('duration'), 0),
+                        'filesize' => Storage::disk('converted')->size($this->getTargetFileName()),
+                        'width' => $targetFormat->get('width'),
+                        'height' => $targetFormat->get('height'),
                         'orientation' => $orientation,
-                        'vbitrate' => $target_format->get('bit_rate'),
-                        'source_is360video' => $this->check360Video($source_format)
+                        'vbitrate' => $targetFormat->get('bit_rate'),
+                        'source_is360video' => $this->is360Video($sourceFormat)
                     ]
                 ]);
         }
 
-        $response = $guzzle->post($url, $requestOptions);
+        $response = $httpClient->post($url, $requestOptions);
 
-        Log::debug(__METHOD__ .': '. $response->getReasonPhrase());
-        if ($this->downloadComplete() && $this->video->download()->get('processed'))
-        {
-            $this->video->download()->update(['processed' => Download::PROCESSED]);
+        Log::debug(__METHOD__ . ': ' . $response->getReasonPhrase());
+        if ($this->isDownloadComplete() && $this->media->download()->get('processed')) {
+            $this->media->download()->update(['processed' => Status::PROCESSED]);
             $this->executeFinalCallback();
+            FFMpeg::cleanupTemporaryFiles();
         }
         Log::debug("Exiting " . __METHOD__);
     }
 
-    public function executeFinalCallback()
+    public function executeFinalCallback(): void
     {
-	    Log::debug("Entering " . __METHOD__);
-        Log::info('Executing final callback for mediakey ' . $this->video->mediakey);
-        $guzzle = new Client();
+        Log::debug("Entering " . __METHOD__);
+        Log::info('Executing final callback for mediakey ' . $this->media->mediakey);
+        $httpClient = new Client();
 
-        $api_token = $this->user->api_token;
+        $apiToken = $this->user->api_token;
         $url = $this->user->url . self::TRANSCODERWEBSERVICE_CALLBACK;
 
-        $response = $guzzle->post($url, [
+        $response = $httpClient->post($url, [
             RequestOptions::JSON => [
-                'api_token' => $api_token,
-                'mediakey' => $this->video->mediakey,
+                'api_token' => $apiToken,
+                'mediakey' => $this->media->mediakey,
                 'finished' => true
             ]
         ]);
 
-        Log::debug(__METHOD__ .': '. $response->getReasonPhrase());
-	    Log::debug("Exiting " . __METHOD__);
+        Log::debug(__METHOD__ . ': ' . $response->getReasonPhrase());
+        Log::debug("Exiting " . __METHOD__);
     }
 
-    public static function executeErrorCallback($video, $message)
+    public static function executeErrorCallback($media, $message): void
     {
-	    Log::debug("Entering " . __METHOD__);
-        Log::info('Executing error callback for mediakey ' . $video->mediakey);
-        $guzzle = new Client();
+        Log::debug("Entering " . __METHOD__);
+        Log::info('Executing error callback for mediakey ' . $media->mediakey);
+        $httpClient = new Client();
 
-        $user = User::find($video->user_id);
-        $api_token = $user->api_token;
+        $user = User::find($media->user_id);
+        $apiToken = $user->api_token;
         $url = $user->url . self::TRANSCODERWEBSERVICE_CALLBACK;
 
-        $response = $guzzle->post($url, [
+        $response = $httpClient->post($url, [
             RequestOptions::JSON => [
-                'api_token' => $api_token,
-                'mediakey' => $video->mediakey,
-                'error' => [ 'message' => $message ]
+                'api_token' => $apiToken,
+                'mediakey' => $media->mediakey,
+                'error' => ['message' => $message]
             ]
         ]);
-        Log::debug(__METHOD__ .': '. $response->getReasonPhrase());
-	    Log::debug("Exiting " . __METHOD__);
+        Log::debug(__METHOD__ . ': ' . $response->getReasonPhrase());
+        Log::debug("Exiting " . __METHOD__);
     }
 
-    public function downloadComplete()
+    public function isDownloadComplete(): bool
     {
-	    Log::debug("Entering " . __METHOD__);
-        Log::info('Check if all downloads are complete for mediakey ' . $this->video->mediakey);
+        Log::debug("Entering " . __METHOD__);
+        Log::info('Check if all downloads are complete for mediakey ' . $this->media->mediakey);
         try {
-            $video = Video::where('mediakey', '=', $this->video->mediakey)->firstOrFail();
-            $total = Video::where('download_id', $video->download_id)->count();
-            $processed = Video::where('download_id', $video->download_id)->where('processed', Video::PROCESSED)->whereNotNull('downloaded_at')->count();
+            $media = Media::where('mediakey', '=', $this->media->mediakey)->firstOrFail();
+            $total = Media::where('download_id', $media->download_id)->count();
+            $processed = Media::where('download_id', $media->download_id)->where('processed', Status::PROCESSED)->whereNotNull('downloaded_at')->count();
             if ($total === $processed) {
-                Log::info('All downloads are complete for mediakey ' . $this->video->mediakey . " ($processed of $total)");
+                Log::info('All downloads are complete for mediakey ' . $this->media->mediakey . " ($processed of $total)");
                 Log::debug("Exiting " . __METHOD__);
                 return true;
             }
-            Log::info('Downloads are not yet complete for mediakey ' . $this->video->mediakey . " ($processed of $total)");
+            Log::info('Downloads are not yet complete for mediakey ' . $this->media->mediakey . " ($processed of $total)");
             Log::debug("Exiting " . __METHOD__);
             return false;
         } catch (\Exception $exception) {
-            Log::info('Downloads are incomplete for mediakey ' . $this->video->mediakey);
+            Log::info('Downloads are incomplete for mediakey ' . $this->media->mediakey);
             Log::debug("Exiting " . __METHOD__);
             return false;
         }
     }
 
-    protected function check360Video($source_format)
+    protected function is360Video($sourceFormat): bool
     {
         $is360Video = false;
-        $side_data_list = isset($source_format->get('side_data_list')[0]) ? $source_format->get('side_data_list')[0] : null;
-        if (isset($side_data_list["side_data_type"])) {
-            $side_data_type = Arr::get($side_data_list, 'side_data_type');
-            $is360Video = Str::contains($side_data_type, 'Spherical Mapping');
+        $sideDataList = $sourceFormat->get('side_data_list')[0] ?? null;
+        if (isset($sideDataList["side_data_type"])) {
+            $sideDataType = Arr::get($sideDataList, 'side_data_type');
+            $is360Video = Str::contains($sideDataType, 'Spherical Mapping');
         }
         return $is360Video;
     }
 
-    protected function applyInitialParameters()
+    protected function applyInitialParameters(): array
     {
-        $profile_options_db = $this->profile->options->pluck('value', 'key')->toArray();
+        $storedProfileOptions = $this->profile->options->pluck('value', 'key')->toArray();
 
-        $profile_options = array();
-        foreach ($profile_options_db as $key => $value) {
-            $profile_options[] = $key;
-            $profile_options[] = $value;
+        $profileOptions = array();
+        foreach ($storedProfileOptions as $key => $value) {
+            $profileOptions[] = $key;
+            $profileOptions[] = $value;
         }
         if ($this->preview) {
-            $profile_options[] = '-ss';
-            $profile_options[] = FFMpeg\Coordinate\TimeCode::fromSeconds($this->video->download()->get()->first()->payload['target']['start']);
+            $profileOptions[] = '-ss';
+            $profileOptions[] = \FFMpeg\Coordinate\TimeCode::fromSeconds($this->media->download()->get()->first()->payload['target']['start']);
         }
 
-        return $profile_options;
+        return $profileOptions;
     }
 
-    protected function applyAdditionalParameters()
+    protected function applyAdditionalParameters(): array
     {
-        $payload = $this->video->download()->get()->first()->payload;
-        $profile_additional_parameters_db = $this->profile->additionalparameters->pluck('value', 'key')->toArray();
-        $profile_additional_parameters = array();
-        foreach ($profile_additional_parameters_db as $key => $value) {
-            $profile_additional_parameters[] = $key;
-            $profile_additional_parameters[] = $value;
+        $payload = $this->media->download()->get()->first()->payload;
+        $storedProfileAdditionalParameters = $this->profile->additionalparameters->pluck('value', 'key')->toArray();
+        $profileAdditionalParameters = array();
+        foreach ($storedProfileAdditionalParameters as $key => $value) {
+            $profileAdditionalParameters[] = $key;
+            $profileAdditionalParameters[] = $value;
         }
-        if ($this->getPreview()) {
-            $profile_additional_parameters[] = '-t';
-            $profile_additional_parameters[] = FFMpeg\Coordinate\TimeCode::fromSeconds($payload['target']['duration']);
+        if ($this->isPreview()) {
+            $profileAdditionalParameters[] = '-t';
+            $profileAdditionalParameters[] = \FFMpeg\Coordinate\TimeCode::fromSeconds($payload['target']['duration']);
         }
-        if ($this->getHLS()) {
-            $filepath_ts = Storage::disk('converted')->path(substr($this->getTargetFileName(), 0, -5) . '_%03d.ts');
 
-            $profile_additional_parameters[] = '-hls_time';
-            $profile_additional_parameters[] = '4';
-            $profile_additional_parameters[] = '-hls_playlist_type';
-            $profile_additional_parameters[] = 'vod';
-            $profile_additional_parameters[] = '-hls_segment_filename';
-            $profile_additional_parameters[] = $filepath_ts;
-        }
-        return $profile_additional_parameters;
+        return $profileAdditionalParameters;
     }
 
-    protected function getTargetFileName()
+    protected function getTargetFileName($playlist = false): string
     {
-        $target = $this->video->target;
+        $target = $this->media->target;
         $separator = '_';
 
         if (isset($target['default']) && $target['default'] == true) {
@@ -552,100 +472,155 @@ class TranscodingController extends Controller
             $separator = '';
         }
 
-        $file = $this->video->path . '_' . $target['created_at'] . $separator . $target['label'] . '.' . $target['extension'];
+        $file = $this->media->path . '_' . $target['created_at'] . $separator . $target['label'] . '.' . $target['extension'];
 
-        if($this->getHLS())
-        {
-            Storage::disk('converted')->makeDirectory($this->getHLSDirectory());
-            $file = $this->getHLSDirectory() . DIRECTORY_SEPARATOR . $this->video->path . '_' . $target['created_at'] . $separator . $target['label'] . '_' . $target['extension'] . '.m3u8';;
+        if ($this->isHLS()) {
+            $preview = $this->isPreview() ? 'preview_' : '';
+            $main = ($playlist === true) ? 'main_' : '';
+            $file = $this->getHLSDirectoryName() . DIRECTORY_SEPARATOR . $main . $preview . $this->media->path . '_' . $target['created_at'] . $separator . $target['label'] . '_' . $target['extension'] . '.m3u8';
+
+            return $file;
         }
 
-        if ($this->getPreview())
-        {
+        if ($this->isPreview()) {
             $file = 'preview_' . $file;
         }
         return $file;
     }
 
-    private function applyFilters($video)
+    private function applyFilters(): string
     {
         $w = $this->dimension->getWidth();
         $h = $this->dimension->getHeight();
         switch ($this->profile->encoder) {
             case 'h264_vaapi':
             {
-                $scale_vaapi = 'scale_vaapi=w=\'if(gt(a\,'.$w.'/'.$h.')\,'.$w.'\,oh*a)\':h=\'if(gt(a\,'.$w.'/'.$h.')\,ow/a\,'.$h.')\'';
-                $video->filters()->custom($scale_vaapi)->synchronize();
-                return $video;
+                return 'scale_vaapi=w=\'if(gt(a\,' . $w . '/' . $h . ')\,' . $w . '\,oh*a)\':h=\'if(gt(a\,' . $w . '/' . $h . ')\,ow/a\,' . $h . ')\'';
             }
 
             case 'h264_nvenc':
             {
-                $scale_nvenc = 'hwupload,scale_npp=w='.$w.':h='.$h.':force_original_aspect_ratio=decrease:force_divisible_by=2:interp_algo=super';
-                //$scale_nvenc = 'scale_npp=w=\'if(gt(a\,'.$w.'/'.$h.')\,'.$w.'\,oh*a)\':h=\'if(gt(a\,'.$w.'/'.$h.')\,ow/a\,'.$h.')\':interp_algo=super';
-                $video->filters()->custom($scale_nvenc)->synchronize();
-                return $video;
+                return 'hwupload,scale_npp=w=' . $w . ':h=' . $h . ':force_original_aspect_ratio=decrease:force_divisible_by=2:interp_algo=super';
             }
 
             default:
             {
-                $scale_default = 'scale=w='.$w.':h='.$h.':force_original_aspect_ratio=decrease,crop=\'iw-mod(iw\,2)\':\'ih-mod(ih\,2)\'';
-                $video->filters()->custom($scale_default)->synchronize();
-                return $video;
+                return 'scale=w=' . $w . ':h=' . $h . ':force_original_aspect_ratio=decrease,crop=\'iw-mod(iw\,2)\':\'ih-mod(ih\,2)\'';
             }
         }
     }
 
-    private function prepare()
+    private function prepareHLSDirectory(): void
     {
-        if($this->getHLS())
-        {
-            Storage::disk('converted')->deleteDirectory($this->getHLSDirectory());
+        if ($this->isHLS()) {
+            Storage::disk('converted')->deleteDirectory($this->getHLSDirectoryName());
         }
     }
 
-    private function getHLSDirectory()
+    private function getHLSDirectoryName(): string
     {
-        return $this->video->path . '_' . $this->video->target['label'] . '_' . $this->video->target['extension'];
-    }
+        $preview = $this->isPreview() ? 'preview_' : '';
 
-    public static function getFFmpegVersion()
-    {
-        try{
-            $ffmpeg = FFMpeg\FFMpeg::create(self::getFFmpegConfig());
-            return $ffmpeg->getFFMpegDriver()->getVersion();
-        }
-        catch (Exception $exception) {
-            return $exception->getMessage();
-        }
+        return $preview . $this->media->path . '_' . $this->media->target['label'] . '_' . $this->media->target['extension'];
     }
 
     /**
      * @return string
-     * @throws Exception
      */
     protected function createHLSArchive(): string
     {
-        $files = Storage::disk('converted')->files($this->getHLSDirectory());
-        $archiveFile = $this->getHLSDirectory() . '.zip';
-        Log::info('Archive: ' . $archiveFile);
+        $archiveFile = $this->getHLSDirectoryName() . '.zip';
+        $this->media->update([
+            'file' => $archiveFile
+        ]);
+        return $archiveFile;
+    }
 
-        $archive = new ZipArchive();
+    /**
+     * @param H264 $h264
+     * @param string $convertedFileName
+     */
+    private function transcodeHLSVideo(H264 $h264, string $convertedFileName): void
+    {
+        if (!Storage::disk('converted')->exists($this->getHLSDirectoryName())) {
+            Storage::disk('converted')->makeDirectory($this->getHLSDirectoryName());
+        }
 
-        if ($archive->open(Storage::disk('converted')->path($archiveFile), ZipArchive::CREATE | ZipArchive::OVERWRITE)) {
-            foreach ($files as $file) {
-                if ($archive->addFile(Storage::disk('converted')->path($file), basename($file))) {
-                    continue;
+        $playlistFileName = $this->getTargetFileName();
+        $tsFileName = substr($this->getTargetFileName(), 0, -5) . '_%03d.ts';
+
+        $ffmpeg = FFMpeg::fromDisk('uploaded')
+            ->open($this->media->path)
+            ->exportForHLS()
+            ->useSegmentFilenameGenerator(function ($name, $format, $key, callable $segments, callable $playlist) use ($tsFileName, $playlistFileName) {
+                $segments($tsFileName);
+                $playlist($playlistFileName);
+            })
+            ->setSegmentLength(4)
+            ->toDisk('converted')
+            ->addFormat($h264, function ($media) {
+                $media->addFilter(function ($filters, $in, $out) {
+                    $filters->custom($in, $this->applyFilters(), $out); // $in, $parameters, $out
+                });
+            })
+            ->onProgress(function ($percentage) use ($convertedFileName) {
+                $this->checkProcess($this->pid);
+                if ($percentage !== 0) {
+                    Log::info("Host: {$this->worker}, PID:  7$this->pid}, {$percentage}% of {$convertedFileName} transcoded");
+                    $this->progress = (int)$percentage;
+                    $this->updateProgress($percentage);
                 }
-                throw new Exception("File [`{$file}`] could not be added to the zip file: " . $archive->getStatusString());
-            }
+            })
+            ->beforeSaving(function ($commands) {
+                $last[] = array_pop($commands);
+                return array_merge($this->applyInitialParameters(), $commands, $this->applyAdditionalParameters(), $last);
+            })
+            ->save($this->getTargetFileName(true))
+            ->cleanupTemporaryFiles();
+    }
 
-            if ($archive->close()) {
-                $this->video->update([
-                    'file' => $archiveFile
-                ]);
+    /**
+     * @param H264 $h264
+     * @param string $convertedFileName
+     */
+    private function transcodeVideo(H264 $h264, string $convertedFileName): void
+    {
+        $ffmpeg = FFMpeg::fromDisk('uploaded')->open($this->media->path)
+            ->export()
+            ->addFilter('-vf', $this->applyFilters())
+            ->onProgress(function ($percentage, $remaining, $rate) use ($convertedFileName) {
+                $this->checkProcess($this->pid);
+                if ($percentage !== 0) {
+                    Log::info("Host: {$this->worker}, PID: {$this->pid}, {$percentage}% of {$convertedFileName} transcoded, {$remaining}s remaining, rate: {$rate}");
+                    $this->progress = (int)$percentage;
+                    $this->updateProgress($percentage);
+                }
+            })
+            ->inFormat($h264)
+            ->toDisk('converted')
+            ->save($this->getTargetFileName())
+            ->cleanupTemporaryFiles();
+    }
+
+
+    private function checkProcess($pid): void
+    {
+        $media = Media::find($this->media->id);
+        if (empty($media)) {
+            Log::debug('Recursively killing process with pid ' . $pid);
+            $this->recursiveKill($pid);
+        }
+    }
+
+    private function recursiveKill($pid): void
+    {
+        $child_pid_list = array();
+        exec('pgrep -P ' . $this->pid, $child_pid_list);
+        foreach ($child_pid_list as $child_pid) {
+            if (preg_match('#[0-9]+#', $child_pid)) {
+                $this->recursiveKill($child_pid);
             }
         }
-        return $archiveFile;
+        exec('kill -9 ' . $pid);
     }
 }

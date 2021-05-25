@@ -155,7 +155,7 @@ php7.3-json php7.3-gd mariadb-client
 ##### Running queue worker
 Queue worker process can be started in the foreground with the following command 
 ```
-$ sudo -u www-data php artisan queue:work --tries=3 --queue=download,video --timeout=84600 --memory=1024
+$ sudo -u www-data php artisan queue:work --tries=3 --queue=download,media --timeout=84600 --memory=1024
 ```
 
 ##### Install queue worker as systemd service
@@ -169,7 +169,7 @@ Description=Transcoding Webservice queue worker
 User=www-data
 Group=www-data
 Restart=on-failure
-ExecStart=/usr/bin/php /opt/transcoding-webservice/artisan queue:work --daemon --tries=3 --queue=download,video --timeout=84600 --memory=1024
+ExecStart=/usr/bin/php /opt/transcoding-webservice/artisan queue:work --daemon --tries=3 --queue=download,media --timeout=84600 --memory=1024
  
 [Install]
 WantedBy=multi-user.target

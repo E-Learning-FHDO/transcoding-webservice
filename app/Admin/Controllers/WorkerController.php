@@ -2,10 +2,10 @@
 
 namespace App\Admin\Controllers;
 
-use App\Http\Controllers\VideoController;
+use App\Http\Controllers\MediaController;
 use App\Models\Profile;
 use App\Http\Controllers\Controller;
-use App\Models\Video;
+use App\Models\Media;
 use App\Models\Worker;
 use Encore\Admin\Controllers\HasResourceActions;
 use Encore\Admin\Controllers\RoleController;

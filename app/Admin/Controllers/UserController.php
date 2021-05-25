@@ -5,6 +5,7 @@ namespace App\Admin\Controllers;
 use App\Models\Administrator;
 use App\Models\Profile;
 use App\Models\User;
+use App\Models\Worker;
 use Encore\Admin\Controllers\AdminController;
 use Encore\Admin\Form;
 use Encore\Admin\Grid;
@@ -35,17 +36,20 @@ class UserController extends AdminController
         $grid = new Grid(new $userModel());
 
         $grid->column('id', 'ID')->sortable();
-        //$grid->column('username', trans('admin.username'));
         $grid->column('name', trans('admin.name'));
         $grid->column('roles', trans('admin.roles'))->pluck('name')->label();
         $grid->column('created_at', 'Created at')->display(function($created_at) {
-                if ($created_at)
-                        return Carbon::parse($created_at)->format(config('app.timestamp_display_format'));
+                if ($created_at) {
+                    return Carbon::parse($created_at)->format(config('app.timestamp_display_format'));
+                }
+                return '';
         });
 
         $grid->column('updated_at', 'Updated at')->display(function($updated_at) {
-                if ($updated_at)
-                        return Carbon::parse($updated_at)->format(config('app.timestamp_display_format'));
+                if ($updated_at) {
+                    return Carbon::parse($updated_at)->format(config('app.timestamp_display_format'));
+                }
+                return '';
         });
 
         $grid->actions(function (Grid\Displayers\Actions $actions) {
@@ -77,7 +81,6 @@ class UserController extends AdminController
         $show = new Show($userModel::findOrFail($id));
 
         $show->field('id', 'ID');
-        //$show->field('username', trans('admin.username'));
         $show->field('email', trans('admin.email'));
         $show->field('name', trans('admin.name'));
         $show->field('roles', trans('admin.roles'))->as(function ($roles) {
@@ -88,8 +91,6 @@ class UserController extends AdminController
         })->label();
 
         $show->field('api_token');
-        $show->field('created_at', trans('admin.created_at'));
-        $show->field('updated_at', trans('admin.updated_at'));
 
         return $show;
     }
@@ -159,10 +160,7 @@ EOT;
         $connection = config('admin.database.connection');
 
         $form->display('id', 'ID');
-        /*$form->text('username', trans('admin.username'))
-            ->creationRules(['required', "unique:{$connection}.{$userTable}"])
-            ->updateRules(['required', "unique:{$connection}.{$userTable},username,{{id}}"]);
-*/
+
         $form->text('email', trans('admin.email'))->rules('required');
         $form->text('name', trans('admin.name'))->rules('required');
         $form->image('avatar', trans('admin.avatar'));
@@ -176,7 +174,7 @@ EOT;
 
         $token = Str::random(32);
         $form->text('api_token')->default($token)->rules('required');
-        $form->text('url')->rules('required')->append($string);
+        $form->url('url')->rules('required')->append($string);
 
         $profile = Profile::all()->pluck('encoder', 'id');
 
@@ -187,6 +185,10 @@ EOT;
 
         $form->display('created_at', trans('admin.created_at'));
         $form->display('updated_at', trans('admin.updated_at'));
+
+        $form->radio('active')->options([1 => 'yes', 0 => 'no']);
+        $form->datetime('active_from');
+        $form->datetime('active_to');
 
         $form->saving(function (Form $form) {
             if ($form->password && $form->model()->password != $form->password) {

@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Download;
+use App\Models\Status;
 use App\Models\User;
 
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 
@@ -48,11 +50,12 @@ class DownloadController extends Controller
             $download = Download::create([
                 'user_id' => Auth::guard('api')->user()->id,
                 'mediakey' => $request->json()->get('mediakey'),
-                'processed' => Download::UNPROCESSED,
+                'processed' => Status::UNPROCESSED,
                 'payload' => $request->json()->all()
             ]);
 
-            $downloadJobId = DownloadFileJob::dispatch($download)->onQueue('download');
+            Queue::pushOn('download', new DownloadFileJob($download), ['worker' => 'debian']);
+
             Log::debug("Exiting " . __METHOD__);
             return response()->json([
                 'message' => 'File is queued for download',
@@ -70,15 +73,15 @@ class DownloadController extends Controller
     public static function deleteById($id)
     {
         Log::debug("Entering " . __METHOD__);
-        $filenames = DB::table('downloads')->select('payload')->whereIn('id', explode(',', $id))->pluck('payload')->toArray();
+        $fileNames = DB::table('downloads')->select('payload')->whereIn('id', explode(',', $id))->pluck('payload')->toArray();
 
-        $files_to_delete = array();
-        foreach ($filenames as $filename) {
-            $filename = json_decode($filename);
-            $files_to_delete[] = $filename->mediakey;
+        $filesToDelete = array();
+        foreach ($fileNames as $fileName) {
+            $fileName = json_decode($fileName);
+            $filesToDelete[] = $fileName->mediakey;
         }
 
-        Storage::disk('uploaded')->delete($files_to_delete);
+        Storage::disk('uploaded')->delete($filesToDelete);
         Log::debug("Exiting " . __METHOD__);
     }
 

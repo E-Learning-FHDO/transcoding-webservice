@@ -4,6 +4,7 @@ namespace App\Admin\Controllers;
 
 use App\Models\Profile;
 use App\Http\Controllers\Controller;
+use App\Models\Worker;
 use Encore\Admin\Controllers\HasResourceActions;
 use Encore\Admin\Controllers\RoleController;
 use Encore\Admin\Facades\Admin;
@@ -131,6 +132,8 @@ class ProfileController extends Controller
         $profile = Profile::all()->pluck('encoder', 'id');
 
         $form->select('fallback_id', 'Fallback')->options($profile);
+        $form->multipleSelect('workers', 'Workers')->options(Worker::all()->pluck('host', 'id'));
+
         $form->divider();
 
         $form->hasMany('options','Options', function (NestedForm $form) {

@@ -18,7 +18,7 @@ class HomeController extends Controller
             ->row('')
             ->row(function (Row $row) {
 
-                $row->column(4, function (Column $column) {
+                $row->column(5, function (Column $column) {
                     $column->append(TranscodingDashboard::environment());
                 });
 /*

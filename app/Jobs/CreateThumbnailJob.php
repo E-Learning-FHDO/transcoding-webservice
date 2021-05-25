@@ -3,9 +3,10 @@
 namespace App\Jobs;
 
 use App\Http\Controllers\TranscodingController;
-use App\Http\Controllers\VideoController;
+use App\Http\Controllers\MediaController;
 use App\Models\DownloadJob;
-use App\Models\Video;
+use App\Models\Media;
+use App\Models\Status;
 use Carbon\Carbon;
 use FFMpeg\Coordinate\Dimension;
 use Illuminate\Bus\Queueable;
@@ -20,31 +21,35 @@ class CreateThumbnailJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public $video;
+    public $media;
 
     private $dimension;
 
-    private $transcoder;
-
-    public function __construct(Video $video)
+    public function __construct(Media $media)
     {
-        $this->video = $video;
+        $this->media = $media;
         $this->dimension = new Dimension(10, 10);
     }
 
     public function handle()
     {
         Log::debug("Entering " . __METHOD__);
-        $this->transcoder = new TranscodingController($this->video, $this->dimension, $this->attempts());
+        $transcoder = new TranscodingController($this->media, $this->dimension, $this->attempts());
 	    try
         {
-        	$this->transcoder->createThumbnail();
+        	$transcoder->createThumbnail();
         }
 
         catch (Throwable $exception)
         {
-            Log::info("CreateThumbnailJob Message: " . $exception->getMessage() . ", Code: " . $exception->getCode() . ", Attempt: " . $this->attempts() . ", Class: " . get_class($exception) . ", Trace: " . $exception->getTraceAsString());
-            $this->video->update(['processed' => Video::FAILED]);
+            Log::info("CreateThumbnailJob Message: "
+                . $exception->getMessage() . ", Code: "
+                . $exception->getCode() . ", Attempt: "
+                . $this->attempts() . ", Class: "
+                . get_class($exception) . ", Trace: "
+                . $exception->getTraceAsString());
+
+            $this->media->update(['processed' => Status::FAILED]);
             $this->job->release();
         }
         Log::debug("Exiting " . __METHOD__);
@@ -53,18 +58,20 @@ class CreateThumbnailJob implements ShouldQueue
     public function failed(Throwable $exception)
     {
         Log::debug("Entering " . __METHOD__);
-        $this->video->update(['processed' => Video::FAILED]);
+        $this->media->update(['processed' => Status::FAILED]);
         $this->failAll();
-        TranscodingController::executeErrorCallback($this->video, $exception->getMessage());
+        if (config('app.callback_enabled')) {
+            TranscodingController::executeErrorCallback($this->media, $exception->getMessage());
+        }
         Log::debug("Exiting " . __METHOD__);
     }
 
     private function failAll()
     {
         Log::debug("Entering " . __METHOD__);
-        Log::info('One or more steps of CreateThumbnailJob with download_id ' . $this->video->download_id . ' failed, cancelling all related jobs');
-        DownloadFileJob::killAssociatedJobs($this->video->download_id);
-        VideoController::deleteAllByMediaKey($this->video->mediakey);
+        Log::info('One or more steps of CreateThumbnailJob with download_id ' . $this->media->download_id . ' failed, cancelling all related jobs');
+        DownloadFileJob::deleteAssociatedJobs($this->media->download_id);
+        MediaController::deleteAllByMediaKey($this->media->mediakey);
         $this->delete();
         Log::debug("Exiting " . __METHOD__);
     }

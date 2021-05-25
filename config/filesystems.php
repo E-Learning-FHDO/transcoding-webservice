@@ -54,7 +54,7 @@ return [
             'driver' => 'local',
             'root' => storage_path('app'),
         ],
-
+/*
         'uploaded' => [
             'driver' => 'local',
             'root' => storage_path('app/public/uploaded'),
@@ -68,6 +68,32 @@ return [
             'url' => env('APP_URL').'/storage/converted',
             'visibility' => 'public',
         ],
+*/
+
+
+        'uploaded' => [
+            'driver' => 's3',
+            'root' => 'uploaded',
+            'endpoint' => env('MINIO_ENDPOINT', 'http://127.0.0.1:9005'),
+            'use_path_style_endpoint' => true,
+            'key' => env('AWS_KEY'),
+            'secret' => env('AWS_SECRET'),
+            'region' => env('AWS_REGION'),
+            'bucket' => env('AWS_BUCKET'),
+        ],
+
+        'converted' => [
+            'driver' => 's3',
+            'root' => 'converted',
+            'endpoint' => env('MINIO_ENDPOINT', 'http://127.0.0.1:9005'),
+            'use_path_style_endpoint' => true,
+            'key' => env('AWS_KEY'),
+            'secret' => env('AWS_SECRET'),
+            'region' => env('AWS_REGION'),
+            'bucket' => env('AWS_BUCKET'),
+        ],
+
+
 
         's3' => [
             'driver' => 's3',

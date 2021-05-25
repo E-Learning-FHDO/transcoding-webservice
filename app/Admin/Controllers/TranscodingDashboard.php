@@ -34,6 +34,9 @@ class TranscodingDashboard
             ['name' => 'Server',            'value' => Arr::get($_SERVER, 'SERVER_SOFTWARE')],
             ['name' => 'Database driver',   'value' => $driver],
 
+            ['name' => 'Upload filesystem', 'value' => config('filesystems.disks.uploaded.driver')],
+            ['name' => 'Converted filesystem', 'value' => config('filesystems.disks.converted.driver')],
+
             ['name' => 'Cache driver',      'value' => config('cache.default')],
             ['name' => 'Session driver',    'value' => config('session.driver')],
             ['name' => 'Queue driver',      'value' => config('queue.default')],

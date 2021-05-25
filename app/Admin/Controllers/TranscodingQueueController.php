@@ -2,10 +2,11 @@
 
 namespace App\Admin\Controllers;
 
-use App\Http\Controllers\VideoController;
+use App\Http\Controllers\MediaController;
 use App\Models\Profile;
 use App\Http\Controllers\Controller;
-use App\Models\Video;
+use App\Models\Media;
+use App\Models\Status;
 use Encore\Admin\Controllers\HasResourceActions;
 use Encore\Admin\Controllers\RoleController;
 use Encore\Admin\Facades\Admin;
@@ -90,7 +91,7 @@ class TranscodingQueueController extends Controller
      */
     public function destroy($id)
     {
-        VideoController::deleteById($id);
+        MediaController::deleteById($id);
         return $this->form()->destroy($id);
     }
 
@@ -101,7 +102,7 @@ class TranscodingQueueController extends Controller
      */
     protected function grid()
     {
-        $grid = new Grid(new Video);
+        $grid = new Grid(new Media);
 
         if (!Admin::user()->isAdministrator()) {
             $grid->model()->where('user_id', '=', Admin::user()->id);
@@ -134,40 +135,41 @@ class TranscodingQueueController extends Controller
         });
 
         $grid->column('processed', __('Processed'))
-            ->using(Video::$status)
+            ->using(Status::$status)
             ->label([
                 '0' => 'default',
                 '1' => 'success',
                 '2' => 'warning',
-                '3' => 'danger',
+                '3' => 'error',
+                '4' => 'primary',
             ]);
 
         $grid->percentage('Percentage');
         $grid->worker('Worker');
         $grid->column('created_at', 'Created at')->display(function ($created_at) {
             if ($created_at) {
-                return Carbon::parse($created_at)->timezone(config('app.timezone'))->format(config('app.timestamp_display_format'));
+                return Carbon::parse($created_at)->format(config('app.timestamp_display_format'));
             }
             return '';
         });
 
         $grid->column('converted_at', 'Converted at')->display(function ($converted_at) {
             if ($converted_at) {
-                return Carbon::parse($converted_at)->timezone(config('app.timezone'))->format(config('app.timestamp_display_format'));
+                return Carbon::parse($converted_at)->format(config('app.timestamp_display_format'));
             }
             return '';
         });
 
         $grid->column('failed_at', 'Failed at')->display(function ($failed_at) {
             if ($failed_at) {
-                return Carbon::parse($failed_at)->timezone(config('app.timezone'))->format(config('app.timestamp_display_format'));
+                return Carbon::parse($failed_at)->format(config('app.timestamp_display_format'));
             }
             return '';
         });
 
         $grid->column('downloaded_at', 'Downloaded at')->display(function ($downloaded_at) {
             if ($downloaded_at) {
-                return Carbon::parse($downloaded_at)->timezone(config('app.timezone'))->format(config('app.timestamp_display_format'));
+                return Carbon::parse($downloaded_at)->format(config('app.timestamp_display_format'));
             }
             return '';
         });
@@ -183,7 +185,7 @@ class TranscodingQueueController extends Controller
      */
     protected function detail($id)
     {
-        $show = new Show(Video::findOrFail($id));
+        $show = new Show(Media::findOrFail($id));
         $show->panel()
             ->tools(function ($tools) {
                 $tools->disableEdit();
@@ -206,7 +208,7 @@ class TranscodingQueueController extends Controller
      */
     protected function form()
     {
-        $form = new Form(new Video);
+        $form = new Form(new Media);
 
         //$form->display('ID');
         $form->text('file', 'File');

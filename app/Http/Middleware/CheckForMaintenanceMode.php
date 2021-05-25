@@ -12,6 +12,6 @@ class CheckForMaintenanceMode extends Middleware
      * @var array
      */
     protected $except = [
-        //
+        'api/v1/status'
     ];
 }

@@ -19,17 +19,18 @@ Auth::routes();
 
 Route::redirect('/',  admin_url('auth/login'));
 
-Route::group(['prefix' => 'api', 'middleware' => ['auth:api']], function(){
+Route::group(['prefix' => 'api/v1', 'middleware' => ['auth:api', 'user.active']], function(){
     Route::post('/transcode', 'DownloadController@store')->name('download');
-    Route::get('/download/{filename}', 'VideoController@getFile')->name('getFile');
-    Route::post('/download/{filename}/finished', 'VideoController@setDownloadFinished')->name('setDownloadFinished');
-    Route::get('/status/{mediakey}', 'VideoController@getStatus')->name('getStatus');
-    Route::delete('/delete/{mediakey}', 'VideoController@deleteAllByMediakey')->name('deleteAllByMediakey');
-    Route::post('/testurl', 'VideoController@testUrl');
+    Route::get('/download/{filename}', 'MediaController@getFile')->name('getFile');
+    Route::post('/download/{filename}/finished', 'MediaController@setDownloadFinished')->name('setDownloadFinished');
+    Route::get('/status/{mediakey}', 'MediaController@getMediaStatus')->name('getMediaStatus');
+    Route::get('/status', 'MediaController@getServiceStatus')->name('getServiceStatus');
+    Route::delete('/delete/{mediakey}', 'MediaController@deleteAllByMediakey')->name('deleteAllByMediakey');
+    Route::post('/testurl', 'MediaController@testUrl');
 
     Route::group(['prefix' => 'jobs'], function(){
-        Route::get('/video', 'VideoController@jobs')->name('downloadJobs');
-        Route::get('/download', 'DownloadController@jobs')->name('videoJobs');
+        Route::get('/media', 'MediaController@jobs')->name('downloadJobs');
+        Route::get('/download', 'DownloadController@jobs')->name('mediaJobs');
     });
 });
 
