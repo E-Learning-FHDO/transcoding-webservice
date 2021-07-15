@@ -1,51 +1,106 @@
 version: "3.2"
 services:
-    webservice:
+    tws_manager:
         build:
-            context: .
-            dockerfile: Dockerfile.webservice
+            context: ../
+            dockerfile: docker/Dockerfile.manager
         ports:
             - "8000:8000"
-        volumes:
-            - type: bind
-              source: ../
-              target: /opt/transcoding-webservice
         networks:
             - default
+        volumes:
+            - tws_appdata:/opt/transcoding-webservice
         environment:
+            - APP_AUTO_SETUP=${APP_AUTO_SETUP}
             - APP_URL=${APP_URL}
-    db:
+            - APP_ENV=${APP_ENV}
+            - APP_KEY=${APP_KEY}
+            - APP_DEBUG=${APP_DEBUG}
+            - APP_NAME=${APP_NAME}
+            - LOC_CHANNEL=${LOG_CHANNEL}
+            - DB_CONNECTION=${DB_CONNECTION}
+            - DB_HOST=${DB_HOST}
+            - DB_PORT=${DB_PORT}
+            - DB_DATABASE=${DB_DATABASE}
+            - DB_USERNAME=${DB_USERNAME}
+            - DB_PASSWORD=${DB_PASSWORD}
+            - BROADCAST_DRIVER=${BROADCAST_DRIVER}
+            - CACHE_DRIVER=${CACHE_DRIVER}
+            - QUEUE_CONNECTION=${QUEUE_CONNECTION}
+            - SESSION_DRIVER=${SESSION_DRIVER}
+            - SESSION_LIFETIME=${SESSION_LIFETIME}
+            - MINIO_ENDPOINT=${MINIO_ENDPOINT}
+            - AWS_KEY=${AWS_KEY}
+            - AWS_SECRET=${AWS_SECRET}
+            - AWS_REGION=${AWS_REGION}
+            - AWS_BUCKET=${AWS_BUCKET}
+            - ZIPSTREAM_AWS_PATH_STYLE_ENDPOINT=${ZIPSTREAM_AWS_PATH_STYLE_ENDPOINT}
+            - FFMPEG_DEBUG=${FFMPEG_DEBUG}
+            - FFPROBE_DEBUG=${FFPROBE_DEBUG}
+            - FFMPEG_THREADS=${FFMPEG_THREADS}
+            - FFMPEG_TIMEOUT=${FFMPEG_TIMEOUT}
+    tws_db:
         image: mariadb
         environment:
-            - MYSQL_ROOT_PASSWORD=root
-            - MYSQL_DATABASE=transcoding_webservice
+            - MARIADB_ROOT_PASSWORD=root
+            - MARIADB_DATABASE=${DB_DATABASE}
+            - MARIADB_USER=${DB_USERNAME}
+            - MARIADB_PASSWORD=${DB_PASSWORD}
         volumes:
-            - persistent:/var/lib/mysql
-    worker-1:
+            - tws_dbdata:/var/lib/mysql
+    tws_storage:
+        image: minio/minio
+        volumes:
+            - tws_miniodata:/data
+        expose:
+            - "9000"
+        environment:
+            MINIO_ROOT_USER: minio
+            MINIO_ROOT_PASSWORD: minio123
+        command: server /data
+        healthcheck:
+            test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+            interval: 30s
+            timeout: 20s
+            retries: 3
+    tws_worker:
         build:
-            context: .
-            dockerfile: Dockerfile.worker
+            context: ../
+            dockerfile: docker/Dockerfile.worker
         depends_on:
-            - "webservice"
-        volumes:
-            - type: bind
-              source: ../
-              target: /opt/transcoding-webservice
+            - "tws_manager"
         networks:
             - default
         restart: on-failure
-    worker-2:
-        build:
-            context: .
-            dockerfile: Dockerfile.worker
-        depends_on:
-            - "webservice"
-        volumes:
-            - type: bind
-              source: ../
-              target: /opt/transcoding-webservice
-        networks:
-            - default
-        restart: on-failure
+        environment:
+            - APP_URL=${APP_URL}
+            - APP_ENV=${APP_ENV}
+            - APP_KEY=${APP_KEY}
+            - APP_DEBUG=${APP_DEBUG}
+            - APP_NAME=${APP_NAME}
+            - LOG_CHANNEL=${LOG_CHANNEL}
+            - DB_CONNECTION=${DB_CONNECTION}
+            - DB_HOST=${DB_HOST}
+            - DB_PORT=${DB_PORT}
+            - DB_DATABASE=${DB_DATABASE}
+            - DB_USERNAME=${DB_USERNAME}
+            - DB_PASSWORD=${DB_PASSWORD}
+            - BROADCAST_DRIVER=${BROADCAST_DRIVER}
+            - CACHE_DRIVER=${CACHE_DRIVER}
+            - QUEUE_CONNECTION=${QUEUE_CONNECTION}
+            - SESSION_DRIVER=${SESSION_DRIVER}
+            - SESSION_LIFETIME=${SESSION_LIFETIME}
+            - MINIO_ENDPOINT=${MINIO_ENDPOINT}
+            - AWS_KEY=${AWS_KEY}
+            - AWS_SECRET=${AWS_SECRET}
+            - AWS_REGION=${AWS_REGION}
+            - AWS_BUCKET=${AWS_BUCKET}
+            - ZIPSTREAM_AWS_PATH_STYLE_ENDPOINT=${ZIPSTREAM_AWS_PATH_STYLE_ENDPOINT}
+            - FFMPEG_DEBUG=${FFMPEG_DEBUG}
+            - FFPROBE_DEBUG=${FFPROBE_DEBUG}
+            - FFMPEG_THREADS=${FFMPEG_THREADS}
+            - FFMPEG_TIMEOUT=${FFMPEG_TIMEOUT}
 volumes:
-  persistent:
+  tws_appdata:
+  tws_dbdata:
+  tws_miniodata:

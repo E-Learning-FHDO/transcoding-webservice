@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\Status;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 use App\Models\Download;
@@ -48,65 +49,69 @@ class CleanupTranscode extends Command
 
     protected function handleFailedDownloads()
     {
-        $downloads = Download::where('processed', '=', Download::FAILED)->get();
-        foreach ($downloads as $download) {
-            $user = User::find($download->user_id);
-            $apiToken = $user->api_token;
-            $url = $user->url . '/transcoderwebservice/callback';
-            try {
-                $httpClient = new Client();
-                $response = $httpClient->post($url, [
-                    RequestOptions::JSON => [
-                        'api_token' => $apiToken,
-                        'mediakey' => $download->mediakey,
-                        'error' => ['message' => 'An error occurred while downloading']
-                    ]
-                ]);
-                Log::debug(__METHOD__ . ': ' . $response->getReasonPhrase());
-            } catch (\Exception $exception) {
-                Log::debug(__METHOD__ . ': ' . $exception->getMessage());
-            } finally {
-                $download->delete();
+        if (config('app.callback_enabled')) {
+            $downloads = Download::where('processed', '=', Status::FAILED)->get();
+            foreach ($downloads as $download) {
+                $user = User::find($download->user_id);
+                $apiToken = $user->api_token;
+                $url = $user->url . '/transcoderwebservice/callback';
+                try {
+                    $httpClient = new Client();
+                    $response = $httpClient->post($url, [
+                        RequestOptions::JSON => [
+                            'api_token' => $apiToken,
+                            'mediakey' => $download->mediakey,
+                            'error' => ['message' => 'An error occurred while downloading']
+                        ]
+                    ]);
+                    Log::debug(__METHOD__ . ': ' . $response->getReasonPhrase());
+                } catch (\Exception $exception) {
+                    Log::debug(__METHOD__ . ': ' . $exception->getMessage());
+                } finally {
+                    $download->delete();
+                }
             }
         }
     }
 
     protected function handleProcessedDownloads()
     {
-        $downloads = Download::where('processed', '=', Download::PROCESSED)->get();
-        foreach ($downloads as $download) {
-            $user = User::find($download->user_id);
-            $apiToken = $user->api_token;
-            $url = $user->url . '/transcoderwebservice/callback';
+        if (config('app.callback_enabled')) {
+            $downloads = Download::where('processed', '=', Status::PROCESSED)->get();
+            foreach ($downloads as $download) {
+                $user = User::find($download->user_id);
+                $apiToken = $user->api_token;
+                $url = $user->url . '/transcoderwebservice/callback';
 
-            try {
-                $httpClient = new Client();
-                $response = $httpClient->post($url, [
-                    RequestOptions::JSON => [
-                        'api_token' => $apiToken,
-                        'mediakey' => $download->mediakey,
-                        'finished' => true
-                    ]
-                ]);
-                Log::debug(__METHOD__ . ': ' . $response->getReasonPhrase());
-            } catch (\Exception $exception) {
-                Log::debug(__METHOD__ . ': ' . $exception->getMessage());
+                try {
+                    $httpClient = new Client();
+                    $response = $httpClient->post($url, [
+                        RequestOptions::JSON => [
+                            'api_token' => $apiToken,
+                            'mediakey' => $download->mediakey,
+                            'finished' => true
+                        ]
+                    ]);
+                    Log::debug(__METHOD__ . ': ' . $response->getReasonPhrase());
+                } catch (\Exception $exception) {
+                    Log::debug(__METHOD__ . ': ' . $exception->getMessage());
+                }
             }
         }
     }
 
     protected function handleProcessingFinishedDownloads()
     {
-        $downloads = Download::where('processed', '=', Download::PROCESSING)->get();
+        $downloads = Download::where('processed', '=', Status::PROCESSING)->get();
         foreach ($downloads as $download) {
             $videos = $download->videos()->get()->all();
             foreach ($videos as $video) {
                 $total = $video->count();
-                $processed = $video->where('processed', Media::PROCESSED)->whereNotNull('downloaded_at')->count();
+                $processed = $video->where('processed', Status::PROCESSED)->whereNotNull('downloaded_at')->count();
                 if ($total === $processed) {
-                    if ($download->processed === Download::PROCESSING) {
+                    if ($download->processed === Status::PROCESSING) {
                         Log::info('All downloads are complete for mediakey ' . $video->mediakey . " ($processed of $total)");
-                        $download->update(['processed' => Download::PROCESSED]);
+                        $download->update(['processed' => Status::PROCESSED]);
                     }
                 }
             }

@@ -5,11 +5,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     php7.3-xml php7.3-zip php7.3-curl php7.3-intl php7.3-mbstring \
     php7.3-json php7.3-gd mariadb-client
 
-RUN wget --quiet -O - https://deb.nodesource.com/setup_12.x | bash - \
+RUN wget --quiet -O - https://deb.nodesource.com/setup_14.x | bash - \
     && apt-get update && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-COPY webservice.sh /webservice.sh
+COPY ./docker/manager.sh /manager.sh
+COPY . /opt/transcoding-webservice
 
 EXPOSE 8000
-CMD ["/webservice.sh"]
+CMD ["/manager.sh"]
