@@ -104,13 +104,13 @@ class CleanupTranscode extends Command
     {
         $downloads = Download::where('processed', '=', Status::PROCESSING)->get();
         foreach ($downloads as $download) {
-            $videos = $download->videos()->get()->all();
-            foreach ($videos as $video) {
-                $total = $video->count();
-                $processed = $video->where('processed', Status::PROCESSED)->whereNotNull('downloaded_at')->count();
+            $media = $download->media()->get()->all();
+            foreach ($media as $medium) {
+                $total = $medium->count();
+                $processed = $medium->where('processed', Status::PROCESSED)->whereNotNull('downloaded_at')->count();
                 if ($total === $processed) {
                     if ($download->processed === Status::PROCESSING) {
-                        Log::info('All downloads are complete for mediakey ' . $video->mediakey . " ($processed of $total)");
+                        Log::info('All downloads are complete for mediakey ' . $medium->mediakey . " ($processed of $total)");
                         $download->update(['processed' => Status::PROCESSED]);
                     }
                 }
