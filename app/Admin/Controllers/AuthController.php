@@ -145,7 +145,7 @@ $('#testbtn').on('click', function() {
     $.ajax({
         method: 'post',
         dataType: "json",
-        url: '/api/testurl',
+        url: '/api/v1/testurl',
         data: {
             url: $('#url').val(),
             api_token: $('#api_token').val()
