@@ -19,7 +19,7 @@
         "laravel-admin-ext/helpers": "^1.2",
         "laravel-admin-ext/log-viewer": "^1.0",
         "laravel-admin-ext/scheduling": "^1.1",
-        "laravel/framework": "^8.41",
+        "laravel/framework": "^8.54",
         "laravel/tinker": "^2.5",
         "laravel/ui": "^3.2",
         "league/flysystem-aws-s3-v3": "1.0.29",
